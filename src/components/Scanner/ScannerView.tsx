@@ -2,18 +2,71 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Camera, Upload, CheckCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import CameraCapture from "@/components/Camera/CameraCapture";
 
 const ScannerView = () => {
-  const [isScanning, setIsScanning] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const { toast } = useToast();
 
-  const handleScan = () => {
-    setIsScanning(true);
-    // Simulação de scan - será substituído pela integração real
-    setTimeout(() => {
-      setIsScanning(false);
-      setScanResult("Cupom escaneado com sucesso!");
-    }, 2000);
+  const handleOpenCamera = () => {
+    setShowCamera(true);
+  };
+
+  const handleImageCapture = async (imageBase64: string) => {
+    setShowCamera(false);
+    setIsProcessing(true);
+    setScanResult(null);
+
+    try {
+      // Check if user is authenticated
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        toast({
+          title: "Autenticação necessária",
+          description: "Você precisa fazer login para escanear cupons.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
+
+      // Call the edge function to process the coupon
+      const { data, error } = await supabase.functions.invoke('process-coupon', {
+        body: {
+          imageBase64,
+          userId: user.id,
+        },
+      });
+
+      if (error) {
+        console.error('Error processing coupon:', error);
+        throw new Error(error.message || 'Falha ao processar cupom');
+      }
+
+      if (data.success) {
+        setScanResult(`Cupom da ${data.cupom.loja_nome} processado com sucesso! Total: R$ ${data.cupom.valor_total.toFixed(2)}`);
+        toast({
+          title: "Cupom processado!",
+          description: data.message,
+        });
+      } else {
+        throw new Error(data.error || 'Falha ao processar cupom');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Erro ao processar cupom",
+        description: error instanceof Error ? error.message : "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -40,11 +93,11 @@ const ScannerView = () => {
 
           <Button
             size="lg"
-            onClick={handleScan}
-            disabled={isScanning}
+            onClick={handleOpenCamera}
+            disabled={isProcessing}
             className="bg-gradient-accent hover:opacity-90 shadow-medium px-8 py-3 text-lg font-medium"
           >
-            {isScanning ? (
+            {isProcessing ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-accent-foreground border-t-transparent mr-2" />
                 Processando...
@@ -88,6 +141,14 @@ const ScannerView = () => {
           </div>
         </div>
       </Card>
+
+      {showCamera && (
+        <CameraCapture
+          onCapture={handleImageCapture}
+          onClose={() => setShowCamera(false)}
+          isProcessing={isProcessing}
+        />
+      )}
     </div>
   );
 };

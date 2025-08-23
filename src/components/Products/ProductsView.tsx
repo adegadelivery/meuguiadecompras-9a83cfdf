@@ -1,25 +1,110 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, Package, TrendingDown, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface ProductData {
+  name: string;
+  lastPrice: number;
+  store: string;
+  purchaseCount: number;
+  lastPurchase: string;
+}
 
 const ProductsView = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [products, setProducts] = useState<ProductData[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  // Dados mockados - serão substituídos pela integração com Supabase
-  const products = [
-    { name: "Arroz Tipo 1 5kg", lastPrice: 15.90, store: "Supermercado ABC", trend: "down" },
-    { name: "Feijão Preto 1kg", lastPrice: 8.50, store: "Supermercado ABC", trend: "up" },
-    { name: "Óleo de Soja 900ml", lastPrice: 5.99, store: "Supermercado ABC", trend: "down" },
-    { name: "Paracetamol 750mg", lastPrice: 12.50, store: "Farmácia XYZ", trend: "up" },
-    { name: "Shampoo Anti-caspa", lastPrice: 18.90, store: "Farmácia XYZ", trend: "down" },
-    { name: "Camiseta Básica M", lastPrice: 29.99, store: "Loja de Roupas Fashion", trend: "up" },
-    { name: "Pão Frances kg", lastPrice: 12.80, store: "Padaria do Bairro", trend: "down" },
-  ];
+  useEffect(() => {
+    fetchProductsData();
+  }, []);
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.store.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    } else {
+      setFilteredProducts(products);
+    }
+  }, [searchTerm, products]);
+
+  const fetchProductsData = async () => {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        toast({
+          title: "Autenticação necessária",
+          description: "Você precisa fazer login para ver seus produtos.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('produtos')
+        .select(`
+          nome,
+          preco,
+          created_at,
+          cupons!inner (
+            loja_nome,
+            data_compra,
+            user_id
+          )
+        `)
+        .eq('cupons.user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching products:', error);
+        throw new Error('Falha ao carregar produtos');
+      }
+
+      // Agrupar produtos por nome e pegar o último preço
+      const productsMap = new Map<string, ProductData>();
+
+      data.forEach(item => {
+        const key = item.nome.toLowerCase();
+        const existing = productsMap.get(key);
+        
+        if (!existing || new Date(item.created_at) > new Date(existing.lastPurchase)) {
+          productsMap.set(key, {
+            name: item.nome,
+            lastPrice: parseFloat(item.preco.toString()),
+            store: item.cupons.loja_nome,
+            lastPurchase: item.created_at,
+            purchaseCount: existing ? existing.purchaseCount + 1 : 1
+          });
+        } else {
+          existing.purchaseCount += 1;
+        }
+      });
+
+      const productsArray = Array.from(productsMap.values())
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      setProducts(productsArray);
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "Erro ao carregar produtos",
+        description: error instanceof Error ? error.message : "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex-1 px-4 py-6">
@@ -56,18 +141,13 @@ const ProductsView = () => {
                     <p className="text-xs text-muted-foreground">{product.store}</p>
                   </div>
                 </div>
-                <div className="text-right flex items-center space-x-2">
-                  <div>
-                    <p className="font-semibold text-primary text-lg">
-                      R$ {product.lastPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Último preço</p>
-                  </div>
-                  {product.trend === "up" ? (
-                    <TrendingUp size={16} className="text-destructive" />
-                  ) : (
-                    <TrendingDown size={16} className="text-success" />
-                  )}
+                <div className="text-right">
+                  <p className="font-semibold text-primary text-lg">
+                    R$ {product.lastPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Comprado {product.purchaseCount}x
+                  </p>
                 </div>
               </div>
             </Card>

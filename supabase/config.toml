@@ -1,1 +1,4 @@
 project_id = "filasvejkaxxqonaemqv"
+
+[functions.process-coupon]
+verify_jwt = false
