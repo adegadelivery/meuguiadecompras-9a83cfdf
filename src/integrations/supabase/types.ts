@@ -14,7 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cupons: {
+        Row: {
+          created_at: string
+          data_compra: string
+          id: string
+          imagem_url: string | null
+          loja_nome: string
+          updated_at: string
+          user_id: string
+          valor_total: number
+        }
+        Insert: {
+          created_at?: string
+          data_compra?: string
+          id?: string
+          imagem_url?: string | null
+          loja_nome: string
+          updated_at?: string
+          user_id: string
+          valor_total: number
+        }
+        Update: {
+          created_at?: string
+          data_compra?: string
+          id?: string
+          imagem_url?: string | null
+          loja_nome?: string
+          updated_at?: string
+          user_id?: string
+          valor_total?: number
+        }
+        Relationships: []
+      }
+      produtos: {
+        Row: {
+          created_at: string
+          cupom_id: string
+          id: string
+          nome: string
+          preco: number
+          quantidade: number
+        }
+        Insert: {
+          created_at?: string
+          cupom_id: string
+          id?: string
+          nome: string
+          preco: number
+          quantidade?: number
+        }
+        Update: {
+          created_at?: string
+          cupom_id?: string
+          id?: string
+          nome?: string
+          preco?: number
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_cupom_id_fkey"
+            columns: ["cupom_id"]
+            isOneToOne: false
+            referencedRelation: "cupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
