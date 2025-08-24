@@ -36,27 +36,40 @@ const AnalysisView = () => {
     const now = new Date();
     
     if (days === 0) {
-      // Hoje - do início do dia de hoje até agora
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      return { start, end };
+      // Hoje - do início do dia de hoje até início de amanhã (exclusivo)
+      const startLocal = new Date();
+      startLocal.setHours(0, 0, 0, 0);
+      const endExclusiveLocal = new Date();
+      endExclusiveLocal.setDate(endExclusiveLocal.getDate() + 1);
+      endExclusiveLocal.setHours(0, 0, 0, 0);
+      
+      // Log para debug
+      console.log('HOJE - startLocal:', startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
+      
+      return { start: startLocal, end: endExclusiveLocal };
     } else if (days === 1) {
-      // Ontem - dia completo de ontem
-      const start = new Date();
-      start.setDate(start.getDate() - 1);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setDate(end.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
+      // Ontem - do início de ontem até início de hoje (exclusivo)
+      const startLocal = new Date();
+      startLocal.setDate(startLocal.getDate() - 1);
+      startLocal.setHours(0, 0, 0, 0);
+      const endExclusiveLocal = new Date();
+      endExclusiveLocal.setHours(0, 0, 0, 0);
+      
+      // Log para debug
+      console.log('ONTEM - startLocal:', startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
+      
+      return { start: startLocal, end: endExclusiveLocal };
     } else {
       // Outros períodos - dos últimos N dias até agora
-      const start = new Date();
-      start.setDate(start.getDate() - days);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      return { start, end };
+      const startLocal = new Date();
+      startLocal.setDate(startLocal.getDate() - days);
+      startLocal.setHours(0, 0, 0, 0);
+      const endExclusiveLocal = new Date();
+      
+      // Log para debug
+      console.log(`${days} DIAS - startLocal:`, startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
+      
+      return { start: startLocal, end: endExclusiveLocal };
     }
   };
 
@@ -78,6 +91,13 @@ const AnalysisView = () => {
       const currentFilter = filters.find(f => f.id === activeFilter);
       const { start, end } = getDateRange(currentFilter?.days || 7);
 
+      // Log para debug da query
+      console.log('Query range:', {
+        start: start.toISOString(),
+        end: end.toISOString(),
+        filter: activeFilter
+      });
+
       const { data: cuponsData, error } = await supabase
         .from('cupons')
         .select(`
@@ -91,7 +111,7 @@ const AnalysisView = () => {
         `)
         .eq('user_id', user.id)
         .gte('data_compra', start.toISOString())
-        .lte('data_compra', end.toISOString())
+        .lt('data_compra', end.toISOString())  // Mudança: lt em vez de lte para exclusivo
         .order('data_compra', { ascending: false });
 
       if (error) {
@@ -99,13 +119,29 @@ const AnalysisView = () => {
         throw new Error('Falha ao carregar dados de análise');
       }
 
-      const purchasesData: Purchase[] = cuponsData.map(cupom => ({
-        date: cupom.data_compra,
-        store: cupom.loja_nome,
-        total: parseFloat(cupom.valor_total.toString()),
-        items: cupom.produtos.map(p => p.nome)
-      }));
+      const purchasesData: Purchase[] = cuponsData
+        .map(cupom => ({
+          date: cupom.data_compra,
+          store: cupom.loja_nome,
+          total: parseFloat(cupom.valor_total.toString()),
+          items: cupom.produtos.map(p => p.nome)
+        }))
+        // Filtro client-side adicional para garantir precisão com timezone local
+        .filter(purchase => {
+          const purchaseDate = new Date(purchase.date);
+          const isInRange = purchaseDate >= start && purchaseDate < end;
+          
+          // Log para debug do filtro client-side
+          if (!isInRange) {
+            console.log(`Filtrado client-side: ${purchase.store} - ${purchaseDate.toLocaleString()}`);
+          }
+          
+          return isInRange;
+        });
 
+      // Log para debug dos resultados
+      console.log(`Total encontrado: ${purchasesData.length} compras`);
+      
       const total = purchasesData.reduce((sum, purchase) => sum + purchase.total, 0);
       const avg = purchasesData.length > 0 ? total / purchasesData.length : 0;
 
