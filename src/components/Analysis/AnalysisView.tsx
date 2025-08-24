@@ -33,24 +33,27 @@ const AnalysisView = () => {
   }, [activeFilter]);
 
   const getDateRange = (days: number) => {
-    const end = new Date();
+    const now = new Date();
     const start = new Date();
+    const end = new Date();
     
     if (days === 0) {
-      // Hoje
+      // Hoje - do início do dia até agora
       start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      end.setTime(now.getTime());
     } else if (days === 1) {
-      // Ontem
-      start.setDate(start.getDate() - 1);
+      // Ontem - dia completo de ontem
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      start.setTime(yesterday.getTime());
       start.setHours(0, 0, 0, 0);
-      end.setDate(end.getDate() - 1);
+      end.setTime(yesterday.getTime());
       end.setHours(23, 59, 59, 999);
     } else {
-      // Outros períodos
+      // Outros períodos - dos últimos N dias até agora
       start.setDate(start.getDate() - days);
       start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
+      end.setTime(now.getTime());
     }
     
     return { start, end };

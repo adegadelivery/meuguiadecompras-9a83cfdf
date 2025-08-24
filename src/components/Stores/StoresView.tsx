@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Store, TrendingUp, Receipt } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ const StoresView = () => {
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchStoresData();
@@ -121,7 +123,11 @@ const StoresView = () => {
           </Card>
         ) : (
           stores.map((store, index) => (
-            <Card key={store.name} className="p-4 shadow-soft hover:shadow-medium transition-shadow">
+            <Card 
+              key={store.name} 
+              className="p-4 shadow-soft hover:shadow-medium transition-shadow cursor-pointer"
+              onClick={() => navigate(`/store/${encodeURIComponent(store.name)}`)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">

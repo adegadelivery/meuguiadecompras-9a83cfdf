@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Package, TrendingDown, TrendingUp } from "lucide-react";
+import { Search, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import ProductFilters from "./ProductFilters";
 
 interface ProductData {
   name: string;
@@ -11,6 +13,7 @@ interface ProductData {
   store: string;
   purchaseCount: number;
   lastPurchase: string;
+  allStores: string[];
 }
 
 const ProductsView = () => {
@@ -18,23 +21,51 @@ const ProductsView = () => {
   const [products, setProducts] = useState<ProductData[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStore, setSelectedStore] = useState("all");
+  const [sortOrder, setSortOrder] = useState<'name' | 'price-asc' | 'price-desc' | 'count'>('name');
+  const [stores, setStores] = useState<string[]>([]);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchProductsData();
   }, []);
 
   useEffect(() => {
+    let filtered = products;
+
+    // Filter by search term
     if (searchTerm) {
-      const filtered = products.filter(product =>
+      filtered = filtered.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.store.toLowerCase().includes(searchTerm.toLowerCase())
+        product.allStores.some(store => store.toLowerCase().includes(searchTerm.toLowerCase()))
       );
-      setFilteredProducts(filtered);
-    } else {
-      setFilteredProducts(products);
     }
-  }, [searchTerm, products]);
+
+    // Filter by store
+    if (selectedStore !== "all") {
+      filtered = filtered.filter(product =>
+        product.allStores.includes(selectedStore)
+      );
+    }
+
+    // Sort products
+    filtered = [...filtered].sort((a, b) => {
+      switch (sortOrder) {
+        case 'price-asc':
+          return a.lastPrice - b.lastPrice;
+        case 'price-desc':
+          return b.lastPrice - a.lastPrice;
+        case 'count':
+          return b.purchaseCount - a.purchaseCount;
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+
+    setFilteredProducts(filtered);
+  }, [searchTerm, products, selectedStore, sortOrder]);
 
   const fetchProductsData = async () => {
     try {
@@ -70,30 +101,56 @@ const ProductsView = () => {
         throw new Error('Falha ao carregar produtos');
       }
 
-      // Agrupar produtos por nome e pegar o último preço
-      const productsMap = new Map<string, ProductData>();
+      // Agrupar produtos por nome e coletar todas as lojas
+      const productsMap = new Map<string, { 
+        lastPrice: number; 
+        lastStore: string; 
+        lastPurchase: string; 
+        count: number;
+        stores: Set<string>;
+      }>();
+      const allStoresSet = new Set<string>();
 
       data.forEach(item => {
         const key = item.nome.toLowerCase();
+        const store = item.cupons.loja_nome;
+        allStoresSet.add(store);
+        
         const existing = productsMap.get(key);
         
-        if (!existing || new Date(item.created_at) > new Date(existing.lastPurchase)) {
+        if (!existing) {
           productsMap.set(key, {
-            name: item.nome,
             lastPrice: parseFloat(item.preco.toString()),
-            store: item.cupons.loja_nome,
+            lastStore: store,
             lastPurchase: item.created_at,
-            purchaseCount: existing ? existing.purchaseCount + 1 : 1
+            count: 1,
+            stores: new Set([store])
           });
         } else {
-          existing.purchaseCount += 1;
+          existing.count += 1;
+          existing.stores.add(store);
+          
+          if (new Date(item.created_at) > new Date(existing.lastPurchase)) {
+            existing.lastPrice = parseFloat(item.preco.toString());
+            existing.lastStore = store;
+            existing.lastPurchase = item.created_at;
+          }
         }
       });
 
-      const productsArray = Array.from(productsMap.values())
+      const productsArray = Array.from(productsMap.entries())
+        .map(([name, data]) => ({
+          name,
+          lastPrice: data.lastPrice,
+          store: data.lastStore,
+          purchaseCount: data.count,
+          lastPurchase: data.lastPurchase,
+          allStores: Array.from(data.stores)
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
       setProducts(productsArray);
+      setStores(Array.from(allStoresSet).sort());
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -116,7 +173,7 @@ const ProductsView = () => {
       </div>
 
       <Card className="p-4 shadow-soft mb-6">
-        <div className="relative">
+        <div className="relative mb-4">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar produto..."
@@ -125,12 +182,24 @@ const ProductsView = () => {
             className="pl-10"
           />
         </div>
+        
+        <ProductFilters
+          stores={stores}
+          selectedStore={selectedStore}
+          onStoreChange={setSelectedStore}
+          sortOrder={sortOrder}
+          onSortChange={setSortOrder}
+        />
       </Card>
 
       <div className="space-y-3">
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product, index) => (
-            <Card key={index} className="p-4 shadow-soft hover:shadow-medium transition-shadow">
+            <Card 
+              key={index} 
+              className="p-4 shadow-soft hover:shadow-medium transition-shadow cursor-pointer"
+              onClick={() => navigate(`/product/${encodeURIComponent(product.name)}`)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3 flex-1">
                   <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
@@ -138,7 +207,12 @@ const ProductsView = () => {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-medium text-foreground">{product.name}</h3>
-                    <p className="text-xs text-muted-foreground">{product.store}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {product.allStores.length > 1 
+                        ? `${product.allStores.length} lojas` 
+                        : product.store
+                      }
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">

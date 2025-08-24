@@ -16,11 +16,11 @@ serve(async (req) => {
   try {
     console.log('Starting coupon processing...');
     
-    const { imageBase64, userId } = await req.json();
+    const { imageBase64, userId, fileType = 'image' } = await req.json();
     
     if (!imageBase64) {
-      console.error('Missing image data');
-      return new Response(JSON.stringify({ error: 'Image data is required' }), {
+      console.error('Missing file data');
+      return new Response(JSON.stringify({ error: 'File data is required' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -77,8 +77,8 @@ serve(async (req) => {
             },
             {
               inline_data: {
-                mime_type: "image/jpeg",
-                data: imageBase64.replace(/^data:image\/[a-z]+;base64,/, '')
+                mime_type: fileType === 'pdf' ? "application/pdf" : "image/jpeg",
+                data: imageBase64.replace(/^data:(image\/[a-z]+|application\/pdf);base64,/, '')
               }
             }
           ]
