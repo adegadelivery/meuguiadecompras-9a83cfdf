@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, Package, Store, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import BottomNavigation from "@/components/Layout/BottomNavigation";
 
 interface ProductPurchase {
   date: string;
@@ -157,6 +158,10 @@ const ProductDetail = () => {
     );
   }
 
+  const handleTabChange = (tab: string) => {
+    navigate("/", { state: { tab } });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-4">
@@ -286,6 +291,7 @@ const ProductDetail = () => {
 
         <div className="pb-20" />
       </div>
+      <BottomNavigation activeTab="products" onTabChange={handleTabChange} />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNavigation from "@/components/Layout/BottomNavigation";
@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState("scan");
 
@@ -22,14 +23,21 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  // Sincronizar aba com navigation state
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state]);
+
   // Redirecionar para dashboard em desktop
   useEffect(() => {
-    if (!loading && user && !isMobile) {
+    if (!loading && user && isMobile === false) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, loading, isMobile, navigate]);
 
-  if (loading) {
+  if (loading || isMobile === undefined) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

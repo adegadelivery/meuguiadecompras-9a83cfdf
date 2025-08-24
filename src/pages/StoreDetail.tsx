@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Store, Receipt, Package, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import BottomNavigation from "@/components/Layout/BottomNavigation";
 
 interface Purchase {
   id: string;
@@ -148,6 +149,10 @@ const StoreDetail = () => {
     );
   }
 
+  const handleTabChange = (tab: string) => {
+    navigate("/", { state: { tab } });
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto p-4">
@@ -253,6 +258,7 @@ const StoreDetail = () => {
 
         <div className="pb-20" />
       </div>
+      <BottomNavigation activeTab="stores" onTabChange={handleTabChange} />
     </div>
   );
 };
