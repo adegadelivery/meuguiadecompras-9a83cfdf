@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNavigation from "@/components/Layout/BottomNavigation";
 import UserMenu from "@/components/Layout/UserMenu";
 import ScannerView from "@/components/Scanner/ScannerView";
@@ -12,6 +13,7 @@ import { Loader2 } from "lucide-react";
 const Index = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState("scan");
 
   useEffect(() => {
@@ -19,6 +21,13 @@ const Index = () => {
       navigate('/auth', { replace: true });
     }
   }, [user, loading, navigate]);
+
+  // Redirecionar para dashboard em desktop
+  useEffect(() => {
+    if (!loading && user && !isMobile) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, loading, isMobile, navigate]);
 
   if (loading) {
     return (

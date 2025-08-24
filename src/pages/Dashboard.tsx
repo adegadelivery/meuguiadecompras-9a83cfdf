@@ -10,6 +10,7 @@ import { Calendar as CalendarIcon, Store, Package, TrendingUp, Receipt, BarChart
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import ProductsCatalog from "@/components/Products/ProductsCatalog";
 
 interface DateRange {
   from: Date;
@@ -315,41 +316,94 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Recent Purchases */}
-        <Card className="p-6">
-          <h3 className="font-semibold mb-4 flex items-center">
-            <Receipt size={18} className="mr-2 text-success" />
-            Compras Recentes
-          </h3>
-          <div className="space-y-4">
-            {loading ? (
-              [1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="animate-pulse border-b border-border/50 pb-4">
-                  <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
-                  <div className="h-6 bg-muted rounded w-1/4"></div>
-                </div>
-              ))
-            ) : data.recentPurchases.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                Nenhuma compra encontrada no período selecionado
-              </p>
-            ) : (
-              data.recentPurchases.map((purchase, index) => (
-                <div key={index} className="flex justify-between items-center border-b border-border/50 pb-4 last:border-0">
-                  <div>
-                    <p className="font-medium">{purchase.store}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(purchase.date).toLocaleDateString('pt-BR')}
+        {/* Grid with Recent Purchases and Complete Products */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Purchases */}
+          <Card className="p-6">
+            <h3 className="font-semibold mb-4 flex items-center">
+              <Receipt size={18} className="mr-2 text-success" />
+              Compras Recentes
+            </h3>
+            <div className="space-y-4">
+              {loading ? (
+                [1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="animate-pulse border-b border-border/50 pb-4">
+                    <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
+                    <div className="h-6 bg-muted rounded w-1/4"></div>
+                  </div>
+                ))
+              ) : data.recentPurchases.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhuma compra encontrada no período selecionado
+                </p>
+              ) : (
+                data.recentPurchases.map((purchase, index) => (
+                  <div key={index} className="flex justify-between items-center border-b border-border/50 pb-4 last:border-0">
+                    <div>
+                      <p className="font-medium">{purchase.store}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(purchase.date).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <p className="font-semibold text-primary">
+                      R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <p className="font-semibold text-primary">
-                    R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+                ))
+              )}
+            </div>
+          </Card>
+
+          {/* Products Analysis Preview */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold flex items-center">
+                <Package size={18} className="mr-2 text-warning" />
+                Produtos Mais Comprados
+              </h3>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/product/all')}
+              >
+                Ver Todos
+              </Button>
+            </div>
+            <div className="space-y-4">
+              {loading ? (
+                [1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse border-b border-border/50 pb-4">
+                    <div className="h-4 bg-muted rounded w-2/3 mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-1/3"></div>
+                  </div>
+                ))
+              ) : data.topProducts.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhum produto encontrado
+                </p>
+              ) : (
+                data.topProducts.slice(0, 3).map((product, index) => (
+                  <div key={product.name} className="border-b border-border/50 pb-4 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-sm">{product.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {product.count}x comprado
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-primary">
+                        R$ {product.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Complete Products Catalog */}
+        <ProductsCatalog dateRange={dateRange} loading={loading} />
       </div>
     </div>
   );

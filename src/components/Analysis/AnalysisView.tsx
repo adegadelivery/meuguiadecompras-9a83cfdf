@@ -34,29 +34,30 @@ const AnalysisView = () => {
 
   const getDateRange = (days: number) => {
     const now = new Date();
-    const start = new Date();
-    const end = new Date();
     
     if (days === 0) {
-      // Hoje - do início do dia até agora
+      // Hoje - do início do dia de hoje até agora
+      const start = new Date();
       start.setHours(0, 0, 0, 0);
-      end.setTime(now.getTime());
+      const end = new Date();
+      return { start, end };
     } else if (days === 1) {
       // Ontem - dia completo de ontem
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      start.setTime(yesterday.getTime());
+      const start = new Date();
+      start.setDate(start.getDate() - 1);
       start.setHours(0, 0, 0, 0);
-      end.setTime(yesterday.getTime());
+      const end = new Date();
+      end.setDate(end.getDate() - 1);
       end.setHours(23, 59, 59, 999);
+      return { start, end };
     } else {
       // Outros períodos - dos últimos N dias até agora
+      const start = new Date();
       start.setDate(start.getDate() - days);
       start.setHours(0, 0, 0, 0);
-      end.setTime(now.getTime());
+      const end = new Date();
+      return { start, end };
     }
-    
-    return { start, end };
   };
 
   const fetchAnalysisData = async () => {
