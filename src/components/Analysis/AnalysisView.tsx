@@ -89,7 +89,7 @@ const AnalysisView = () => {
       }
 
       const currentFilter = filters.find(f => f.id === activeFilter);
-      const { start, end } = getDateRange(currentFilter?.days || 7);
+      const { start, end } = getDateRange(currentFilter?.days ?? 7);
 
       // Log para debug da query
       console.log('Query range:', {
