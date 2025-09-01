@@ -53,24 +53,33 @@ export type Database = {
           cupom_id: string
           id: string
           nome: string
+          palavras_chave: string[] | null
           preco: number
+          preco_unitario: number | null
           quantidade: number
+          unidade: string | null
         }
         Insert: {
           created_at?: string
           cupom_id: string
           id?: string
           nome: string
+          palavras_chave?: string[] | null
           preco: number
+          preco_unitario?: number | null
           quantidade?: number
+          unidade?: string | null
         }
         Update: {
           created_at?: string
           cupom_id?: string
           id?: string
           nome?: string
+          palavras_chave?: string[] | null
           preco?: number
+          preco_unitario?: number | null
           quantidade?: number
+          unidade?: string | null
         }
         Relationships: [
           {

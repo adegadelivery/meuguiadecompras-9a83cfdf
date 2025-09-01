@@ -55,24 +55,57 @@ serve(async (req) => {
         contents: [{
           parts: [
             {
-              text: `Analise este cupom fiscal e extraia as seguintes informações em formato JSON:
+              text: `FOQUE PRINCIPALMENTE na extração detalhada dos produtos individuais e seus preços. Analise este cupom fiscal e extraia as informações no formato JSON:
+
               {
                 "loja_nome": "nome da loja",
                 "valor_total": 0.00,
                 "produtos": [
                   {
-                    "nome": "nome do produto",
-                    "preco": 0.00,
-                    "quantidade": 1
+                    "nome": "nome normalizado do produto",
+                    "palavras_chave": ["palavra1", "palavra2"],
+                    "preco_unitario": 0.00,
+                    "quantidade": 1.5,
+                    "preco_total": 0.00,
+                    "unidade": "un"
                   }
                 ]
               }
+
+              INSTRUÇÕES ESPECÍFICAS:
               
-              Instruções:
-              - Extraia apenas produtos reais com preços válidos
+              1. PRODUTOS INDIVIDUAIS - FOCO PRINCIPAL:
+              - Identifique CADA produto separadamente, mesmo que sejam similares
+              - Para produtos idênticos comprados em quantidade > 1, mantenha como um item com quantidade correta
+              - Extraia SEMPRE 2 palavras-chave principais do produto (ex: "BANANA PRATA" → ["BANANA", "PRATA"])
+              
+              2. PREÇOS E QUANTIDADES:
+              - preco_unitario: preço de 1 unidade do produto
+              - quantidade: quantos foram comprados (pode ser decimal para produtos por peso)
+              - preco_total: preco_unitario × quantidade
+              - Para produtos por PESO: quantidade é o peso (ex: 1.250 kg de banana)
+              - Para produtos UNITÁRIOS: quantidade é o número de itens (ex: 2 sabonetes)
+              
+              3. UNIDADES:
+              - "un" para produtos unitários (sabonete, shampoo, etc.)
+              - "kg" para produtos por quilograma
+              - "g" para produtos por grama
+              - "ml" ou "l" para líquidos
+              
+              4. NORMALIZAÇÃO DE NOMES:
+              - Use nomes consistentes e claros (ex: "SABONETE DOVE" ao invés de "SAB DOVE 90G")
+              - Mantenha a marca quando visível
+              - Para frutas/verduras: use nome comum + variedade se houver
+              
+              5. EXEMPLOS DE EXTRAÇÃO:
+              - "2x SABONETE DOVE 90G R$ 3,50 R$ 7,00" → nome: "SABONETE DOVE", palavras_chave: ["SABONETE", "DOVE"], preco_unitario: 3.50, quantidade: 2, preco_total: 7.00, unidade: "un"
+              - "BANANA PRATA 1,250 KG R$ 4,99/KG R$ 6,24" → nome: "BANANA PRATA", palavras_chave: ["BANANA", "PRATA"], preco_unitario: 4.99, quantidade: 1.25, preco_total: 6.24, unidade: "kg"
+              - "LEITE INTEGRAL 1L R$ 4,50" → nome: "LEITE INTEGRAL", palavras_chave: ["LEITE", "INTEGRAL"], preco_unitario: 4.50, quantidade: 1, preco_total: 4.50, unidade: "l"
+              
+              6. VALIDAÇÕES:
               - Use valores numéricos para preços (não strings)
-              - Se não conseguir identificar produtos individuais, coloque apenas o valor total
-              - Seja preciso com os nomes dos produtos
+              - Certifique-se que preco_unitario × quantidade ≈ preco_total
+              - Se não conseguir identificar produtos individuais claramente, tente ao máximo extrair pelo menos o nome e valor
               - Responda APENAS com o JSON, sem texto adicional`
             },
             {
@@ -147,9 +180,14 @@ serve(async (req) => {
       const produtosToInsert = couponData.produtos.map((produto: any) => ({
         cupom_id: cupomData.id,
         nome: produto.nome || 'Produto sem nome',
-        preco: produto.preco || 0,
+        preco: produto.preco_total || produto.preco || 0,
+        preco_unitario: produto.preco_unitario || produto.preco || 0,
         quantidade: produto.quantidade || 1,
+        unidade: produto.unidade || 'un',
+        palavras_chave: produto.palavras_chave || [],
       }));
+
+      console.log('Products to insert:', produtosToInsert);
 
       const { error: produtosError } = await supabase
         .from('produtos')
@@ -159,7 +197,7 @@ serve(async (req) => {
         console.error('Error saving products:', produtosError);
         // Don't throw error, coupon is already saved
       } else {
-        console.log('Products saved successfully');
+        console.log('Products saved successfully with enhanced data');
       }
     }
 
