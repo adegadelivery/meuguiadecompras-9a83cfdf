@@ -66,6 +66,7 @@ const ProductsCatalog = ({ dateRange, loading: parentLoading }: ProductsCatalogP
           produtos (
             nome,
             preco,
+            preco_unitario,
             quantidade
           )
         `)
@@ -82,7 +83,7 @@ const ProductsCatalog = ({ dateRange, loading: parentLoading }: ProductsCatalogP
       const productsMap = new Map<string, {
         totalSpent: number;
         totalCount: number;
-        prices: number[];
+        unitPrices: number[];
         stores: Set<string>;
         lastDate: string;
       }>();
@@ -96,17 +97,18 @@ const ProductsCatalog = ({ dateRange, loading: parentLoading }: ProductsCatalogP
           const productData = productsMap.get(produto.nome) || {
             totalSpent: 0,
             totalCount: 0,
-            prices: [],
+            unitPrices: [],
             stores: new Set(),
             lastDate: cupom.data_compra
           };
 
-          const price = parseFloat(produto.preco.toString());
+          const totalPrice = parseFloat(produto.preco.toString());
+          const unitPrice = parseFloat((produto.preco_unitario || produto.preco).toString());
           const quantity = produto.quantidade;
 
-          productData.totalSpent += price * quantity;
+          productData.totalSpent += totalPrice;
           productData.totalCount += quantity;
-          productData.prices.push(price);
+          productData.unitPrices.push(unitPrice);
           productData.stores.add(cupom.loja_nome);
           
           if (cupom.data_compra > productData.lastDate) {
@@ -122,7 +124,7 @@ const ProductsCatalog = ({ dateRange, loading: parentLoading }: ProductsCatalogP
         name,
         totalSpent: data.totalSpent,
         totalCount: data.totalCount,
-        averagePrice: data.prices.reduce((sum, price) => sum + price, 0) / data.prices.length,
+        averagePrice: data.unitPrices.reduce((sum, price) => sum + price, 0) / data.unitPrices.length,
         stores: Array.from(data.stores),
         lastPurchaseDate: data.lastDate
       }));
@@ -276,7 +278,7 @@ const ProductsCatalog = ({ dateRange, loading: parentLoading }: ProductsCatalogP
                         </p>
                       </div>
                       <div>
-                        <p className="text-muted-foreground">Preço Médio</p>
+                        <p className="text-muted-foreground">Preço Unit. Médio</p>
                         <p className="font-semibold text-primary">
                           R$ {product.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>

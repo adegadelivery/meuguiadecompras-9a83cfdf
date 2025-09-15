@@ -62,6 +62,7 @@ const ProductDetail = () => {
         .select(`
           nome,
           preco,
+          preco_unitario,
           quantidade,
           created_at,
           cupons!inner (
@@ -83,7 +84,7 @@ const ProductDetail = () => {
       const purchasesData: ProductPurchase[] = data.map(item => ({
         date: item.cupons.data_compra,
         store: item.cupons.loja_nome,
-        price: parseFloat(item.preco.toString()),
+        price: parseFloat((item.preco_unitario || item.preco).toString()),
         quantity: item.quantidade
       }));
 
@@ -91,26 +92,27 @@ const ProductDetail = () => {
       const storesMap = new Map<string, {
         purchaseCount: number;
         totalQuantity: number;
-        prices: number[];
+        unitPrices: number[];
         totalSpent: number;
       }>();
 
       data.forEach(item => {
         const store = item.cupons.loja_nome;
-        const price = parseFloat(item.preco.toString());
+        const unitPrice = parseFloat((item.preco_unitario || item.preco).toString());
+        const totalPrice = parseFloat(item.preco.toString());
         const quantity = item.quantidade;
         
         const existing = storesMap.get(store) || {
           purchaseCount: 0,
           totalQuantity: 0,
-          prices: [],
+          unitPrices: [],
           totalSpent: 0
         };
         
         existing.purchaseCount += 1;
         existing.totalQuantity += quantity;
-        existing.prices.push(price);
-        existing.totalSpent += price * quantity;
+        existing.unitPrices.push(unitPrice);
+        existing.totalSpent += totalPrice;
         
         storesMap.set(store, existing);
       });
@@ -120,18 +122,18 @@ const ProductDetail = () => {
           name,
           purchaseCount: data.purchaseCount,
           totalQuantity: data.totalQuantity,
-          averagePrice: data.prices.reduce((sum, p) => sum + p, 0) / data.prices.length,
-          lastPrice: data.prices[0], // Já vem ordenado por created_at desc
+          averagePrice: data.unitPrices.reduce((sum, p) => sum + p, 0) / data.unitPrices.length,
+          lastPrice: data.unitPrices[0], // Já vem ordenado por created_at desc
           totalSpent: data.totalSpent
         }))
         .sort((a, b) => b.totalSpent - a.totalSpent);
 
       // Calcular estatísticas gerais
-      const allPrices = data.map(item => parseFloat(item.preco.toString()));
+      const allUnitPrices = data.map(item => parseFloat((item.preco_unitario || item.preco).toString()));
       const totalQty = data.reduce((sum, item) => sum + item.quantidade, 0);
-      const avgPrice = allPrices.reduce((sum, price) => sum + price, 0) / allPrices.length;
-      const minPrice = Math.min(...allPrices);
-      const maxPrice = Math.max(...allPrices);
+      const avgPrice = allUnitPrices.reduce((sum, price) => sum + price, 0) / allUnitPrices.length;
+      const minPrice = Math.min(...allUnitPrices);
+      const maxPrice = Math.max(...allUnitPrices);
 
       setPurchases(purchasesData);
       setStores(storesData);
@@ -196,7 +198,7 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3">
               <TrendingUp size={20} className="text-primary" />
               <div>
-                <p className="text-xs text-muted-foreground">Preço Médio</p>
+                <p className="text-xs text-muted-foreground">Preço Unit. Médio</p>
                 <p className="font-semibold text-lg">
                   R$ {averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -208,7 +210,7 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3">
               <TrendingDown size={20} className="text-success" />
               <div>
-                <p className="text-xs text-muted-foreground">Menor Preço</p>
+                <p className="text-xs text-muted-foreground">Menor Preço Unit.</p>
                 <p className="font-semibold text-lg text-success">
                   R$ {priceRange.min.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -220,7 +222,7 @@ const ProductDetail = () => {
             <div className="flex items-center gap-3">
               <TrendingUp size={20} className="text-destructive" />
               <div>
-                <p className="text-xs text-muted-foreground">Maior Preço</p>
+                <p className="text-xs text-muted-foreground">Maior Preço Unit.</p>
                 <p className="font-semibold text-lg text-destructive">
                   R$ {priceRange.max.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -248,7 +250,7 @@ const ProductDetail = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">
-                    R$ {store.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {store.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Total: R$ {store.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -278,7 +280,7 @@ const ProductDetail = () => {
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">
-                    R$ {purchase.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {purchase.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Total: R$ {(purchase.price * purchase.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

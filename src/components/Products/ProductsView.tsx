@@ -86,6 +86,7 @@ const ProductsView = () => {
         .select(`
           nome,
           preco,
+          preco_unitario,
           created_at,
           cupons!inner (
             loja_nome,
@@ -120,7 +121,7 @@ const ProductsView = () => {
         
         if (!existing) {
           productsMap.set(key, {
-            lastPrice: parseFloat(item.preco.toString()),
+            lastPrice: parseFloat((item.preco_unitario || item.preco).toString()),
             lastStore: store,
             lastPurchase: item.created_at,
             count: 1,
@@ -131,7 +132,7 @@ const ProductsView = () => {
           existing.stores.add(store);
           
           if (new Date(item.created_at) > new Date(existing.lastPurchase)) {
-            existing.lastPrice = parseFloat(item.preco.toString());
+            existing.lastPrice = parseFloat((item.preco_unitario || item.preco).toString());
             existing.lastStore = store;
             existing.lastPurchase = item.created_at;
           }
