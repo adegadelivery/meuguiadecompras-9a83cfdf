@@ -69,7 +69,7 @@ const Index = () => {
       <div className="max-w-md mx-auto min-h-screen flex flex-col">
         {/* Header com menu do usuário */}
         <div className="flex justify-between items-center p-4 border-b bg-card">
-          <h1 className="text-xl font-bold text-primary">CupomScan</h1>
+          <h1 className="text-xl font-bold text-primary">Meu Guia de Compras</h1>
           <UserMenu />
         </div>
         
