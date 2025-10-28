@@ -54,7 +54,7 @@ const AuthForm = () => {
     <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-strong">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">CupomScan</CardTitle>
+          <CardTitle className="text-2xl font-bold">Meu Guia de Compras</CardTitle>
           <CardDescription>
             Acesse sua conta ou crie uma nova
           </CardDescription>
