@@ -106,7 +106,7 @@ const StoreDetail = () => {
           };
           
           existing.totalQuantity += produto.quantidade;
-          existing.totalSpent += parseFloat(produto.preco.toString()) * produto.quantidade;
+          existing.totalSpent += parseFloat(produto.preco.toString());
           existing.prices.push(parseFloat(produto.preco.toString()));
           existing.count += 1;
           
@@ -119,7 +119,7 @@ const StoreDetail = () => {
           name,
           totalQuantity: data.totalQuantity,
           totalSpent: data.totalSpent,
-          averagePrice: data.prices.reduce((sum, price) => sum + price, 0) / data.prices.length,
+          averagePrice: data.totalSpent / data.totalQuantity,
           purchaseCount: data.count
         }))
         .sort((a, b) => b.totalSpent - a.totalSpent);
@@ -215,7 +215,7 @@ const StoreDetail = () => {
                           {product.quantidade}x {product.nome}
                         </span>
                         <span className="font-medium">
-                          R$ {(product.preco * product.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {product.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     ))}
