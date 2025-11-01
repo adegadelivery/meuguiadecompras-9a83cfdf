@@ -55,58 +55,63 @@ serve(async (req) => {
         contents: [{
           parts: [
             {
-              text: `FOQUE PRINCIPALMENTE na extração detalhada dos produtos individuais e seus preços. Analise este cupom fiscal e extraia as informações no formato JSON:
+              text: `Você é um assistente de extração de dados de alta precisão para um aplicativo de finanças pessoais. 
+Analise este cupom fiscal brasileiro e extraia as informações em JSON.
 
-              {
-                "loja_nome": "nome da loja",
-                "valor_total": 0.00,
-                "produtos": [
-                  {
-                    "nome": "nome normalizado do produto",
-                    "palavras_chave": ["palavra1", "palavra2"],
-                    "preco_unitario": 0.00,
-                    "quantidade": 1.5,
-                    "preco_total": 0.00,
-                    "unidade": "un"
-                  }
-                ]
-              }
+REGRAS CRÍTICAS DE EXTRAÇÃO:
 
-              INSTRUÇÕES ESPECÍFICAS:
-              
-              1. PRODUTOS INDIVIDUAIS - FOCO PRINCIPAL:
-              - Identifique CADA produto separadamente, mesmo que sejam similares
-              - Para produtos idênticos comprados em quantidade > 1, mantenha como um item com quantidade correta
-              - Extraia SEMPRE 2 palavras-chave principais do produto (ex: "BANANA PRATA" → ["BANANA", "PRATA"])
-              
-              2. PREÇOS E QUANTIDADES:
-              - preco_unitario: preço de 1 unidade do produto
-              - quantidade: quantos foram comprados (pode ser decimal para produtos por peso)
-              - preco_total: preco_unitario × quantidade
-              - Para produtos por PESO: quantidade é o peso (ex: 1.250 kg de banana)
-              - Para produtos UNITÁRIOS: quantidade é o número de itens (ex: 2 sabonetes)
-              
-              3. UNIDADES:
-              - "un" para produtos unitários (sabonete, shampoo, etc.)
-              - "kg" para produtos por quilograma
-              - "g" para produtos por grama
-              - "ml" ou "l" para líquidos
-              
-              4. NORMALIZAÇÃO DE NOMES:
-              - Use nomes consistentes e claros (ex: "SABONETE DOVE" ao invés de "SAB DOVE 90G")
-              - Mantenha a marca quando visível
-              - Para frutas/verduras: use nome comum + variedade se houver
-              
-              5. EXEMPLOS DE EXTRAÇÃO:
-              - "2x SABONETE DOVE 90G R$ 3,50 R$ 7,00" → nome: "SABONETE DOVE", palavras_chave: ["SABONETE", "DOVE"], preco_unitario: 3.50, quantidade: 2, preco_total: 7.00, unidade: "un"
-              - "BANANA PRATA 1,250 KG R$ 4,99/KG R$ 6,24" → nome: "BANANA PRATA", palavras_chave: ["BANANA", "PRATA"], preco_unitario: 4.99, quantidade: 1.25, preco_total: 6.24, unidade: "kg"
-              - "LEITE INTEGRAL 1L R$ 4,50" → nome: "LEITE INTEGRAL", palavras_chave: ["LEITE", "INTEGRAL"], preco_unitario: 4.50, quantidade: 1, preco_total: 4.50, unidade: "l"
-              
-              6. VALIDAÇÕES:
-              - Use valores numéricos para preços (não strings)
-              - Certifique-se que preco_unitario × quantidade ≈ preco_total
-              - Se não conseguir identificar produtos individuais claramente, tente ao máximo extrair pelo menos o nome e valor
-              - Responda APENAS com o JSON, sem texto adicional`
+1. NOME DA LOJA:
+   - Procure o nome do estabelecimento no CABEÇALHO do cupom
+   - NUNCA retorne "Loja Desconhecida" se o nome estiver visível
+   - Se realmente não conseguir identificar, use "Loja não identificada"
+
+2. VALOR TOTAL PAGO:
+   - Procure por "VALOR PAGO" ou "TOTAL" na parte inferior do cupom
+   - Este é o valor final que o cliente pagou
+
+3. PRODUTOS (REGRA MAIS IMPORTANTE):
+   - O cupom tem colunas: DESCRICAO, QTDE, UN, VL UNIT, VL TOTAL
+   - ⚠️ ATENÇÃO: NÃO confunda VL UNIT com VL TOTAL!
+   - VL UNIT = preço unitário (por unidade/kg) - NÃO use este para preco_total
+   - VL TOTAL = preço total da linha (QTDE × VL UNIT) - USE ESTE para preco_total
+   - Você DEVE extrair:
+     * nome: texto da coluna DESCRICAO
+     * quantidade: valor da coluna QTDE
+     * preco_unitario: valor da coluna VL UNIT
+     * preco_total: valor da coluna VL TOTAL (o valor mais à direita na linha)
+     * unidade: valor da coluna UN (un, kg, g, l, ml)
+     * palavras_chave: 2 palavras principais do produto para busca
+
+FORMATO JSON EXATO:
+
+{
+  "loja_nome": "NOME DO ESTABELECIMENTO",
+  "valor_total": 87.54,
+  "produtos": [
+    {
+      "nome": "AGUA MINERAL",
+      "palavras_chave": ["AGUA", "MINERAL"],
+      "preco_unitario": 0.79,
+      "quantidade": 12,
+      "preco_total": 9.48,
+      "unidade": "un"
+    },
+    {
+      "nome": "COXA DE FRANGO",
+      "palavras_chave": ["COXA", "FRANGO"],
+      "preco_unitario": 34.90,
+      "quantidade": 0.534,
+      "preco_total": 18.63,
+      "unidade": "kg"
+    }
+  ]
+}
+
+VALIDAÇÕES:
+- Use valores numéricos para preços (não strings)
+- Verifique: preco_unitario × quantidade ≈ preco_total
+- Extraia TODOS os produtos da lista
+- Responda APENAS com o JSON, sem texto adicional`
             },
             {
               inline_data: {
