@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { Store, TrendingUp, Receipt } from "lucide-react";
+import { Store, TrendingUp, Receipt, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,9 @@ interface LojaData {
   name: string;
   total: number;
   purchases: number;
+  bills: number;
+  hasReceipts: boolean;
+  hasBills: boolean;
 }
 
 interface StoresViewProps {
@@ -41,34 +44,69 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
         return;
       }
 
-      const { data, error } = await supabase
+      // Fetch cupons
+      const { data: cuponsData, error: cuponsError } = await supabase
         .from('cupons')
         .select('loja_nome, valor_total')
         .eq('user_id', user.id);
 
-      if (error) {
-        console.error('Error fetching stores:', error);
-        throw new Error('Falha ao carregar dados das lojas');
+      if (cuponsError) {
+        console.error('Error fetching cupons:', cuponsError);
+        throw new Error('Falha ao carregar dados dos cupons');
       }
 
-      // Agrupar por loja e calcular totais
-      const storesMap = new Map<string, { total: number; count: number }>();
+      // Fetch paid bills
+      const { data: billsData, error: billsError } = await supabase
+        .from('contas_pagar')
+        .select('fornecedor_nome, valor')
+        .eq('user_id', user.id)
+        .eq('status', 'paga');
+
+      if (billsError) {
+        console.error('Error fetching bills:', billsError);
+        throw new Error('Falha ao carregar dados das contas');
+      }
+
+      // Unified map for stores/suppliers
+      const storesMap = new Map<string, { 
+        total: number; 
+        purchases: number; 
+        bills: number; 
+      }>();
       let total = 0;
 
-      data.forEach(cupom => {
-        const existing = storesMap.get(cupom.loja_nome) || { total: 0, count: 0 };
+      // Process cupons
+      (cuponsData || []).forEach(cupom => {
+        const existing = storesMap.get(cupom.loja_nome) || { total: 0, purchases: 0, bills: 0 };
+        const valor = parseFloat(cupom.valor_total.toString());
         storesMap.set(cupom.loja_nome, {
-          total: existing.total + parseFloat(cupom.valor_total.toString()),
-          count: existing.count + 1
+          total: existing.total + valor,
+          purchases: existing.purchases + 1,
+          bills: existing.bills
         });
-        total += parseFloat(cupom.valor_total.toString());
+        total += valor;
+      });
+
+      // Process bills
+      (billsData || []).forEach(bill => {
+        const existing = storesMap.get(bill.fornecedor_nome) || { total: 0, purchases: 0, bills: 0 };
+        const valor = parseFloat(bill.valor.toString());
+        storesMap.set(bill.fornecedor_nome, {
+          total: existing.total + valor,
+          purchases: existing.purchases,
+          bills: existing.bills + 1
+        });
+        total += valor;
       });
 
       const storesArray = Array.from(storesMap.entries())
         .map(([name, data]) => ({
           name,
           total: data.total,
-          purchases: data.count
+          purchases: data.purchases,
+          bills: data.bills,
+          hasReceipts: data.purchases > 0,
+          hasBills: data.bills > 0
         }))
         .sort((a, b) => b.total - a.total);
 
@@ -86,11 +124,37 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
     }
   };
 
+  const getStoreIcon = (store: LojaData) => {
+    if (store.hasReceipts && store.hasBills) {
+      return (
+        <div className="flex -space-x-1">
+          <Store size={14} className="text-primary" />
+          <CreditCard size={14} className="text-warning" />
+        </div>
+      );
+    }
+    if (store.hasBills) {
+      return <CreditCard size={18} className="text-warning" />;
+    }
+    return <Store size={18} className="text-primary" />;
+  };
+
+  const getStoreSubtitle = (store: LojaData) => {
+    const parts = [];
+    if (store.purchases > 0) {
+      parts.push(`${store.purchases} compra${store.purchases > 1 ? 's' : ''}`);
+    }
+    if (store.bills > 0) {
+      parts.push(`${store.bills} conta${store.bills > 1 ? 's' : ''} paga${store.bills > 1 ? 's' : ''}`);
+    }
+    return parts.join(' • ');
+  };
+
   return (
     <div className={cn("flex-1", isDesktop ? "" : "px-4 py-6")}>
       {!isDesktop && (
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Minhas Lojas</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Lojas e Fornecedores</h1>
           <p className="text-muted-foreground">
             Acompanhe onde você mais gasta
           </p>
@@ -105,7 +169,7 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
             R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
           </p>
           <p className="text-sm opacity-75 mt-2">
-            em {stores.length} lojas diferentes
+            em {stores.length} lojas/fornecedores
           </p>
         </div>
       </Card>
@@ -129,7 +193,7 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
             <Store size={48} className="mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-2 font-medium">Nenhuma loja encontrada</p>
             <p className="text-sm text-muted-foreground">
-              Escaneie seus primeiros cupons para começar a acompanhar seus gastos por loja.
+              Escaneie cupons ou cadastre contas para começar a acompanhar seus gastos.
             </p>
           </Card>
         ) : (
@@ -141,14 +205,18 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Store size={18} className="text-primary" />
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    store.hasBills && !store.hasReceipts ? "bg-warning/10" : "bg-primary/10"
+                  )}>
+                    {getStoreIcon(store)}
                   </div>
                   <div>
                     <h3 className="font-medium text-foreground">{store.name}</h3>
                     <div className="flex items-center text-xs text-muted-foreground">
-                      <Receipt size={12} className="mr-1" />
-                      {store.purchases} compras
+                      {store.hasReceipts && <Receipt size={12} className="mr-1" />}
+                      {store.hasBills && <CreditCard size={12} className="mr-1" />}
+                      {getStoreSubtitle(store)}
                     </div>
                   </div>
                 </div>
