@@ -6,6 +6,7 @@ import { Search, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ProductFilters from "./ProductFilters";
+import { cn } from "@/lib/utils";
 
 interface ProductData {
   name: string;
@@ -16,7 +17,11 @@ interface ProductData {
   allStores: string[];
 }
 
-const ProductsView = () => {
+interface ProductsViewProps {
+  isDesktop?: boolean;
+}
+
+const ProductsView = ({ isDesktop = false }: ProductsViewProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState<ProductData[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
@@ -165,15 +170,17 @@ const ProductsView = () => {
   };
 
   return (
-    <div className="flex-1 px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Catálogo de Preços</h1>
-        <p className="text-muted-foreground">
-          Acompanhe os preços dos produtos que você compra
-        </p>
-      </div>
+    <div className={cn("flex-1", isDesktop ? "" : "px-4 py-6")}>
+      {!isDesktop && (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Catálogo de Preços</h1>
+          <p className="text-muted-foreground">
+            Acompanhe os preços dos produtos que você compra
+          </p>
+        </div>
+      )}
 
-      <Card className="p-4 shadow-soft mb-6">
+      <Card className={cn("p-4 shadow-soft mb-6", isDesktop && "max-w-2xl")}>
         <div className="relative mb-4">
           <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -193,12 +200,16 @@ const ProductsView = () => {
         />
       </Card>
 
-      <div className="space-y-3">
+      <div className={cn(
+        isDesktop 
+          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" 
+          : "space-y-3"
+      )}>
         {filteredProducts.length > 0 ? (
           filteredProducts.map((product, index) => (
             <Card 
               key={index} 
-              className="p-4 shadow-soft hover:shadow-medium transition-shadow cursor-pointer"
+              className="p-4 shadow-soft hover:shadow-medium transition-all cursor-pointer hover:scale-[1.02]"
               onClick={() => navigate(`/product/${encodeURIComponent(product.name)}`)}
             >
               <div className="flex items-center justify-between">
@@ -228,7 +239,7 @@ const ProductsView = () => {
             </Card>
           ))
         ) : (
-          <Card className="p-8 text-center shadow-soft">
+          <Card className="p-8 text-center shadow-soft col-span-full">
             <Package size={48} className="mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground">
               {searchTerm ? "Nenhum produto encontrado" : "Nenhum produto cadastrado ainda"}
@@ -237,7 +248,7 @@ const ProductsView = () => {
         )}
       </div>
 
-      <div className="pb-20" />
+      {!isDesktop && <div className="pb-20" />}
     </div>
   );
 };

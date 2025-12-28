@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Store, TrendingUp, Receipt } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface LojaData {
   name: string;
@@ -11,7 +12,11 @@ interface LojaData {
   purchases: number;
 }
 
-const StoresView = () => {
+interface StoresViewProps {
+  isDesktop?: boolean;
+}
+
+const StoresView = ({ isDesktop = false }: StoresViewProps) => {
   const [stores, setStores] = useState<LojaData[]>([]);
   const [totalSpent, setTotalSpent] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -82,15 +87,17 @@ const StoresView = () => {
   };
 
   return (
-    <div className="flex-1 px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Minhas Lojas</h1>
-        <p className="text-muted-foreground">
-          Acompanhe onde você mais gasta
-        </p>
-      </div>
+    <div className={cn("flex-1", isDesktop ? "" : "px-4 py-6")}>
+      {!isDesktop && (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Minhas Lojas</h1>
+          <p className="text-muted-foreground">
+            Acompanhe onde você mais gasta
+          </p>
+        </div>
+      )}
 
-      <Card className="p-6 shadow-medium mb-6 bg-gradient-primary">
+      <Card className={cn("p-6 shadow-medium mb-6 bg-gradient-primary", isDesktop && "max-w-md")}>
         <div className="text-center text-primary-foreground">
           <TrendingUp size={32} className="mx-auto mb-3 opacity-90" />
           <p className="text-sm opacity-90 mb-1">Total Gasto</p>
@@ -103,9 +110,13 @@ const StoresView = () => {
         </div>
       </Card>
 
-      <div className="space-y-3">
+      <div className={cn(
+        isDesktop 
+          ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" 
+          : "space-y-3"
+      )}>
         {loading ? (
-          [1, 2, 3].map((i) => (
+          [1, 2, 3, 4, 5, 6].map((i) => (
             <Card key={i} className="p-4">
               <div className="animate-pulse">
                 <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
@@ -114,7 +125,7 @@ const StoresView = () => {
             </Card>
           ))
         ) : stores.length === 0 ? (
-          <Card className="p-8 text-center shadow-soft">
+          <Card className="p-8 text-center shadow-soft col-span-full">
             <Store size={48} className="mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-2 font-medium">Nenhuma loja encontrada</p>
             <p className="text-sm text-muted-foreground">
@@ -125,7 +136,7 @@ const StoresView = () => {
           stores.map((store, index) => (
             <Card 
               key={store.name} 
-              className="p-4 shadow-soft hover:shadow-medium transition-shadow cursor-pointer"
+              className="p-4 shadow-soft hover:shadow-medium transition-all cursor-pointer hover:scale-[1.02]"
               onClick={() => navigate(`/store/${encodeURIComponent(store.name)}`)}
             >
               <div className="flex items-center justify-between">
@@ -155,7 +166,7 @@ const StoresView = () => {
         )}
       </div>
 
-      <div className="pb-20" />
+      {!isDesktop && <div className="pb-20" />}
     </div>
   );
 };
