@@ -14,6 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
+      categorias_financeiras: {
+        Row: {
+          cor: string | null
+          created_at: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          cor?: string | null
+          created_at?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          cor?: string | null
+          created_at?: string
+          id?: string
+          nome?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contas_pagar: {
+        Row: {
+          categoria_id: string | null
+          categoria_nome: string | null
+          conta_financeira: string | null
+          created_at: string
+          data_competencia: string
+          data_emissao: string
+          data_pagamento: string | null
+          data_vencimento: string
+          forma_pagamento: string | null
+          fornecedor_id: string | null
+          fornecedor_nome: string
+          historico: string | null
+          id: string
+          numero_documento: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          categoria_id?: string | null
+          categoria_nome?: string | null
+          conta_financeira?: string | null
+          created_at?: string
+          data_competencia?: string
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento: string
+          forma_pagamento?: string | null
+          fornecedor_id?: string | null
+          fornecedor_nome: string
+          historico?: string | null
+          id?: string
+          numero_documento?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          valor: number
+        }
+        Update: {
+          categoria_id?: string | null
+          categoria_nome?: string | null
+          conta_financeira?: string | null
+          created_at?: string
+          data_competencia?: string
+          data_emissao?: string
+          data_pagamento?: string | null
+          data_vencimento?: string
+          forma_pagamento?: string | null
+          fornecedor_id?: string | null
+          fornecedor_nome?: string
+          historico?: string | null
+          id?: string
+          numero_documento?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contas_pagar_categoria_id_fkey"
+            columns: ["categoria_id"]
+            isOneToOne: false
+            referencedRelation: "categorias_financeiras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contas_pagar_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cupons: {
         Row: {
           created_at: string
@@ -44,6 +146,27 @@ export type Database = {
           updated_at?: string
           user_id?: string
           valor_total?: number
+        }
+        Relationships: []
+      }
+      fornecedores: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          user_id?: string
         }
         Relationships: []
       }
