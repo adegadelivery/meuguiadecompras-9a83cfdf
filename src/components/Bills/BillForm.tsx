@@ -38,6 +38,10 @@ interface Fornecedor {
   nome: string;
 }
 
+interface Loja {
+  nome: string;
+}
+
 const formasPagamento = [
   "Dinheiro",
   "Cartão de Crédito",
@@ -54,6 +58,7 @@ const BillForm = ({ onSuccess, onCancel, editingBill }: BillFormProps) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [lojas, setLojas] = useState<Loja[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
 
   const [formData, setFormData] = useState({
@@ -72,6 +77,7 @@ const BillForm = ({ onSuccess, onCancel, editingBill }: BillFormProps) => {
   useEffect(() => {
     if (user) {
       fetchFornecedores();
+      fetchLojas();
       fetchCategorias();
     }
   }, [user]);
@@ -79,6 +85,15 @@ const BillForm = ({ onSuccess, onCancel, editingBill }: BillFormProps) => {
   const fetchFornecedores = async () => {
     const { data } = await supabase.from("fornecedores").select("id, nome").order("nome");
     if (data) setFornecedores(data);
+  };
+
+  const fetchLojas = async () => {
+    const { data } = await supabase.from("cupons").select("loja_nome").order("loja_nome");
+    if (data) {
+      // Extract unique store names
+      const uniqueLojas = [...new Set(data.map(c => c.loja_nome))];
+      setLojas(uniqueLojas.map(nome => ({ nome })));
+    }
   };
 
   const fetchCategorias = async () => {
@@ -241,9 +256,16 @@ const BillForm = ({ onSuccess, onCancel, editingBill }: BillFormProps) => {
             list="fornecedores-list"
           />
           <datalist id="fornecedores-list">
+            {/* Existing suppliers */}
             {fornecedores.map((f) => (
-              <option key={f.id} value={f.nome} />
+              <option key={`fornecedor-${f.id}`} value={f.nome} />
             ))}
+            {/* Stores from cupons */}
+            {lojas
+              .filter(l => !fornecedores.some(f => f.nome.toLowerCase() === l.nome.toLowerCase()))
+              .map((l) => (
+                <option key={`loja-${l.nome}`} value={l.nome} />
+              ))}
           </datalist>
         </div>
 

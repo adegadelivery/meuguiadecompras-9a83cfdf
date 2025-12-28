@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Store, Receipt, Package, Calendar, ChevronRight } from "lucide-react";
+import { ArrowLeft, Store, Receipt, Package, Calendar, ChevronRight, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,6 +16,15 @@ interface Purchase {
   date: string;
   total: number;
   products: { nome: string; preco: number; quantidade: number }[];
+}
+
+interface Bill {
+  id: string;
+  date: string;
+  total: number;
+  historico: string | null;
+  categoria: string | null;
+  forma_pagamento: string;
 }
 
 interface ProductSummary {
@@ -32,6 +41,7 @@ const StoreDetailContent = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalSpent, setTotalSpent] = useState(0);
@@ -58,8 +68,8 @@ const StoreDetailContent = () => {
 
       const decodedStoreName = decodeURIComponent(storeName!);
 
-      // Buscar todas as compras da loja
-      const { data: cuponsData, error } = await supabase
+      // Fetch purchases (cupons)
+      const { data: cuponsData, error: cuponsError } = await supabase
         .from('cupons')
         .select(`
           id,
@@ -75,13 +85,27 @@ const StoreDetailContent = () => {
         .eq('loja_nome', decodedStoreName)
         .order('data_compra', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching store data:', error);
+      if (cuponsError) {
+        console.error('Error fetching store data:', cuponsError);
         throw new Error('Falha ao carregar dados da loja');
       }
 
-      // Processar dados das compras
-      const purchasesData: Purchase[] = cuponsData.map(cupom => ({
+      // Fetch paid bills for this supplier
+      const { data: billsData, error: billsError } = await supabase
+        .from('contas_pagar')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('fornecedor_nome', decodedStoreName)
+        .eq('status', 'paga')
+        .order('data_pagamento', { ascending: false });
+
+      if (billsError) {
+        console.error('Error fetching bills:', billsError);
+        // Don't throw, just continue without bills
+      }
+
+      // Process purchases
+      const purchasesData: Purchase[] = (cuponsData || []).map(cupom => ({
         id: cupom.id,
         date: cupom.data_compra,
         total: parseFloat(cupom.valor_total.toString()),
@@ -92,7 +116,17 @@ const StoreDetailContent = () => {
         }))
       }));
 
-      // Calcular resumo dos produtos
+      // Process bills
+      const billsProcessed: Bill[] = (billsData || []).map(bill => ({
+        id: bill.id,
+        date: bill.data_pagamento || bill.data_vencimento,
+        total: parseFloat(bill.valor.toString()),
+        historico: bill.historico,
+        categoria: bill.categoria_nome,
+        forma_pagamento: bill.forma_pagamento || 'Não informado'
+      }));
+
+      // Calculate product summaries
       const productsMap = new Map<string, {
         totalQuantity: number;
         totalSpent: number;
@@ -100,7 +134,7 @@ const StoreDetailContent = () => {
         count: number;
       }>();
 
-      cuponsData.forEach(cupom => {
+      (cuponsData || []).forEach(cupom => {
         cupom.produtos.forEach(produto => {
           const existing = productsMap.get(produto.nome) || {
             totalQuantity: 0,
@@ -128,11 +162,14 @@ const StoreDetailContent = () => {
         }))
         .sort((a, b) => b.totalSpent - a.totalSpent);
 
-      const total = purchasesData.reduce((sum, purchase) => sum + purchase.total, 0);
+      // Calculate totals
+      const purchasesTotal = purchasesData.reduce((sum, purchase) => sum + purchase.total, 0);
+      const billsTotal = billsProcessed.reduce((sum, bill) => sum + bill.total, 0);
 
       setPurchases(purchasesData);
+      setBills(billsProcessed);
       setProducts(productsData);
-      setTotalSpent(total);
+      setTotalSpent(purchasesTotal + billsTotal);
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -155,6 +192,20 @@ const StoreDetailContent = () => {
 
   const handleTabChange = (tab: string) => {
     navigate("/", { state: { tab } });
+  };
+
+  const hasPurchases = purchases.length > 0;
+  const hasBills = bills.length > 0;
+
+  const getSummaryText = () => {
+    const parts = [];
+    if (hasPurchases) {
+      parts.push(`${purchases.length} compra${purchases.length > 1 ? 's' : ''}`);
+    }
+    if (hasBills) {
+      parts.push(`${bills.length} conta${bills.length > 1 ? 's' : ''}`);
+    }
+    return parts.join(' • ');
   };
 
   const content = (
@@ -182,15 +233,27 @@ const StoreDetailContent = () => {
             <ArrowLeft size={16} />
           </Button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <Store size={20} className="text-primary" />
+            <div className={cn(
+              "w-10 h-10 rounded-lg flex items-center justify-center",
+              hasBills && !hasPurchases ? "bg-warning/10" : "bg-primary/10"
+            )}>
+              {hasPurchases && hasBills ? (
+                <div className="flex -space-x-1">
+                  <Store size={14} className="text-primary" />
+                  <CreditCard size={14} className="text-warning" />
+                </div>
+              ) : hasBills ? (
+                <CreditCard size={20} className="text-warning" />
+              ) : (
+                <Store size={20} className="text-primary" />
+              )}
             </div>
             <div>
               <h1 className="text-xl font-bold text-foreground">
                 {decodeURIComponent(storeName!)}
               </h1>
               <p className="text-sm text-muted-foreground">
-                {purchases.length} compras • R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                {getSummaryText()} • R$ {totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -198,11 +261,27 @@ const StoreDetailContent = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="history" className="space-y-6">
-          <TabsList className={cn("grid w-full", isMobile ? "grid-cols-2" : "grid-cols-2 max-w-md")}>
-            <TabsTrigger value="history">Histórico</TabsTrigger>
-            <TabsTrigger value="products">Produtos</TabsTrigger>
+          <TabsList className={cn(
+            "grid w-full",
+            hasBills ? (isMobile ? "grid-cols-3" : "grid-cols-3 max-w-lg") : (isMobile ? "grid-cols-2" : "grid-cols-2 max-w-md")
+          )}>
+            <TabsTrigger value="history">
+              <Receipt size={14} className="mr-1" />
+              Compras
+            </TabsTrigger>
+            {hasBills && (
+              <TabsTrigger value="bills">
+                <CreditCard size={14} className="mr-1" />
+                Contas
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="products">
+              <Package size={14} className="mr-1" />
+              Produtos
+            </TabsTrigger>
           </TabsList>
 
+          {/* Purchases Tab */}
           <TabsContent value="history" className="space-y-4">
             <div className={cn(
               !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -244,6 +323,47 @@ const StoreDetailContent = () => {
             </div>
           </TabsContent>
 
+          {/* Bills Tab */}
+          {hasBills && (
+            <TabsContent value="bills" className="space-y-4">
+              <div className={cn(
+                !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              )}>
+                {bills.map((bill) => (
+                  <Card key={bill.id} className={cn("p-4", isMobile && "mb-4")}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar size={16} />
+                        <span className="text-sm">
+                          {new Date(bill.date).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="font-semibold text-warning text-lg">
+                        R$ {bill.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      {bill.historico && (
+                        <p className="text-foreground">{bill.historico}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {bill.categoria && (
+                          <span className="text-xs bg-warning/10 text-warning px-2 py-1 rounded-full">
+                            {bill.categoria}
+                          </span>
+                        )}
+                        <span className="text-xs bg-muted px-2 py-1 rounded-full">
+                          {bill.forma_pagamento}
+                        </span>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+          )}
+
+          {/* Products Tab */}
           <TabsContent value="products" className="space-y-4">
             <div className={cn(
               !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"

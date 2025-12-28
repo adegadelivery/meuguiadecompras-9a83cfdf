@@ -1,16 +1,18 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Calendar, Receipt, DollarSign } from "lucide-react";
+import { BarChart3, Calendar, Receipt, DollarSign, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-interface Purchase {
+interface HistoryItem {
+  type: 'purchase' | 'bill';
   date: string;
   store: string;
   total: number;
   items: string[];
+  category?: string;
 }
 
 interface AnalysisViewProps {
@@ -19,7 +21,7 @@ interface AnalysisViewProps {
 
 const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
   const [activeFilter, setActiveFilter] = useState("7days");
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPeriod, setTotalPeriod] = useState(0);
   const [avgPurchase, setAvgPurchase] = useState(0);
@@ -41,39 +43,24 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
     const now = new Date();
     
     if (days === 0) {
-      // Hoje - do início do dia de hoje até início de amanhã (exclusivo)
       const startLocal = new Date();
       startLocal.setHours(0, 0, 0, 0);
       const endExclusiveLocal = new Date();
       endExclusiveLocal.setDate(endExclusiveLocal.getDate() + 1);
       endExclusiveLocal.setHours(0, 0, 0, 0);
-      
-      // Log para debug
-      console.log('HOJE - startLocal:', startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
-      
       return { start: startLocal, end: endExclusiveLocal };
     } else if (days === 1) {
-      // Ontem - do início de ontem até início de hoje (exclusivo)
       const startLocal = new Date();
       startLocal.setDate(startLocal.getDate() - 1);
       startLocal.setHours(0, 0, 0, 0);
       const endExclusiveLocal = new Date();
       endExclusiveLocal.setHours(0, 0, 0, 0);
-      
-      // Log para debug
-      console.log('ONTEM - startLocal:', startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
-      
       return { start: startLocal, end: endExclusiveLocal };
     } else {
-      // Outros períodos - dos últimos N dias até agora
       const startLocal = new Date();
       startLocal.setDate(startLocal.getDate() - days);
       startLocal.setHours(0, 0, 0, 0);
       const endExclusiveLocal = new Date();
-      
-      // Log para debug
-      console.log(`${days} DIAS - startLocal:`, startLocal.toLocaleString(), 'endExclusiveLocal:', endExclusiveLocal.toLocaleString());
-      
       return { start: startLocal, end: endExclusiveLocal };
     }
   };
@@ -96,14 +83,8 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
       const currentFilter = filters.find(f => f.id === activeFilter);
       const { start, end } = getDateRange(currentFilter?.days ?? 7);
 
-      // Log para debug da query
-      console.log('Query range:', {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        filter: activeFilter
-      });
-
-      const { data: cuponsData, error } = await supabase
+      // Fetch cupons
+      const { data: cuponsData, error: cuponsError } = await supabase
         .from('cupons')
         .select(`
           id,
@@ -116,41 +97,67 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         `)
         .eq('user_id', user.id)
         .gte('data_compra', start.toISOString())
-        .lt('data_compra', end.toISOString())  // Mudança: lt em vez de lte para exclusivo
+        .lt('data_compra', end.toISOString())
         .order('data_compra', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching analysis data:', error);
-        throw new Error('Falha ao carregar dados de análise');
+      if (cuponsError) {
+        console.error('Error fetching cupons:', cuponsError);
+        throw new Error('Falha ao carregar dados de compras');
       }
 
-      const purchasesData: Purchase[] = cuponsData
+      // Fetch paid bills
+      const { data: billsData, error: billsError } = await supabase
+        .from('contas_pagar')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'paga')
+        .not('data_pagamento', 'is', null)
+        .gte('data_pagamento', start.toISOString())
+        .lt('data_pagamento', end.toISOString())
+        .order('data_pagamento', { ascending: false });
+
+      if (billsError) {
+        console.error('Error fetching bills:', billsError);
+        throw new Error('Falha ao carregar dados de contas');
+      }
+
+      // Process cupons into history items
+      const purchasesHistory: HistoryItem[] = (cuponsData || [])
         .map(cupom => ({
+          type: 'purchase' as const,
           date: cupom.data_compra,
           store: cupom.loja_nome,
           total: parseFloat(cupom.valor_total.toString()),
           items: cupom.produtos.map(p => p.nome)
         }))
-        // Filtro client-side adicional para garantir precisão com timezone local
         .filter(purchase => {
           const purchaseDate = new Date(purchase.date);
-          const isInRange = purchaseDate >= start && purchaseDate < end;
-          
-          // Log para debug do filtro client-side
-          if (!isInRange) {
-            console.log(`Filtrado client-side: ${purchase.store} - ${purchaseDate.toLocaleString()}`);
-          }
-          
-          return isInRange;
+          return purchaseDate >= start && purchaseDate < end;
         });
 
-      // Log para debug dos resultados
-      console.log(`Total encontrado: ${purchasesData.length} compras`);
-      
-      const total = purchasesData.reduce((sum, purchase) => sum + purchase.total, 0);
-      const avg = purchasesData.length > 0 ? total / purchasesData.length : 0;
+      // Process bills into history items
+      const billsHistory: HistoryItem[] = (billsData || [])
+        .map(bill => ({
+          type: 'bill' as const,
+          date: bill.data_pagamento!,
+          store: bill.fornecedor_nome,
+          total: parseFloat(bill.valor.toString()),
+          items: bill.historico ? [bill.historico] : [],
+          category: bill.categoria_nome || undefined
+        }))
+        .filter(bill => {
+          const billDate = new Date(bill.date);
+          return billDate >= start && billDate < end;
+        });
 
-      setPurchases(purchasesData);
+      // Combine and sort by date
+      const allHistory = [...purchasesHistory, ...billsHistory]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const total = allHistory.reduce((sum, item) => sum + item.total, 0);
+      const avg = allHistory.length > 0 ? total / allHistory.length : 0;
+
+      setHistory(allHistory);
       setTotalPeriod(total);
       setAvgPurchase(avg);
     } catch (error) {
@@ -171,7 +178,7 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">Análise de Gastos</h1>
           <p className="text-muted-foreground">
-            Acompanhe seu histórico de compras
+            Acompanhe seu histórico de gastos
           </p>
         </div>
       )}
@@ -231,9 +238,9 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
                   <Receipt size={16} className="text-success" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Compras</p>
+                  <p className="text-xs text-muted-foreground">Registros</p>
                   <p className="font-semibold text-lg">
-                    {loading ? "..." : purchases.length}
+                    {loading ? "..." : history.length}
                   </p>
                 </div>
               </div>
@@ -259,7 +266,7 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
       <Card className={cn("p-4 shadow-soft mb-4", isDesktop && "max-w-4xl")}>
         <h3 className="font-semibold mb-4 flex items-center">
           <Receipt size={18} className="mr-2 text-primary" />
-          Histórico de Compras
+          Histórico de Gastos
         </h3>
         <div className={cn(
           isDesktop ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"
@@ -275,47 +282,65 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
                 </div>
               </div>
             ))
-          ) : purchases.length === 0 ? (
+          ) : history.length === 0 ? (
             <div className="text-center py-8 col-span-full">
               <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-2 font-medium">
-                Nenhuma compra encontrada
+                Nenhum gasto encontrado
               </p>
               <p className="text-sm text-muted-foreground">
                 Não há registros para o período selecionado.
               </p>
             </div>
           ) : (
-            purchases.map((purchase, index) => (
+            history.map((item, index) => (
               <div key={index} className={cn(
                 "pb-4",
                 !isDesktop && "border-b border-border/50 last:border-b-0",
                 isDesktop && "bg-muted/30 rounded-lg p-4"
               )}>
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <p className="font-medium text-foreground">{purchase.store}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(purchase.date).toLocaleDateString('pt-BR')}
-                    </p>
+                  <div className="flex items-start gap-2">
+                    <div className={cn(
+                      "w-6 h-6 rounded flex items-center justify-center mt-0.5",
+                      item.type === 'purchase' ? "bg-primary/10" : "bg-warning/10"
+                    )}>
+                      {item.type === 'purchase' ? (
+                        <Receipt size={14} className="text-primary" />
+                      ) : (
+                        <CreditCard size={14} className="text-warning" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{item.store}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(item.date).toLocaleDateString('pt-BR')}
+                        {item.type === 'bill' && item.category && (
+                          <span className="ml-2 text-warning">• {item.category}</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                   <p className="font-semibold text-primary">
-                    R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {item.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                {purchase.items.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {purchase.items.slice(0, isDesktop ? 5 : 3).map((item, itemIndex) => (
+                {item.items.length > 0 && (
+                  <div className="flex flex-wrap gap-1 ml-8">
+                    {item.items.slice(0, isDesktop ? 5 : 3).map((itemName, itemIndex) => (
                       <span 
                         key={itemIndex}
-                        className="text-xs bg-muted px-2 py-1 rounded-full"
+                        className={cn(
+                          "text-xs px-2 py-1 rounded-full",
+                          item.type === 'purchase' ? "bg-muted" : "bg-warning/10 text-warning"
+                        )}
                       >
-                        {item}
+                        {itemName}
                       </span>
                     ))}
-                    {purchase.items.length > (isDesktop ? 5 : 3) && (
+                    {item.items.length > (isDesktop ? 5 : 3) && (
                       <span className="text-xs text-muted-foreground px-2 py-1">
-                        +{purchase.items.length - (isDesktop ? 5 : 3)} mais
+                        +{item.items.length - (isDesktop ? 5 : 3)} mais
                       </span>
                     )}
                   </div>
