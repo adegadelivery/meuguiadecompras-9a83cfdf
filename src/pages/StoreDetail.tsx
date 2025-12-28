@@ -3,7 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Store, Receipt, Package, Calendar, ChevronRight, CreditCard } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ArrowLeft, Store, Receipt, Package, Calendar, ChevronRight, CreditCard, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -15,7 +18,7 @@ interface Purchase {
   id: string;
   date: string;
   total: number;
-  products: { nome: string; preco: number; quantidade: number }[];
+  products: { nome: string; preco: number; quantidade: number; preco_unitario?: number | null }[];
 }
 
 interface Bill {
@@ -45,6 +48,10 @@ const StoreDetailContent = () => {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalSpent, setTotalSpent] = useState(0);
+
+  // Modal state
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     if (storeName) {
@@ -78,7 +85,8 @@ const StoreDetailContent = () => {
           produtos (
             nome,
             preco,
-            quantidade
+            quantidade,
+            preco_unitario
           )
         `)
         .eq('user_id', user.id)
@@ -101,7 +109,6 @@ const StoreDetailContent = () => {
 
       if (billsError) {
         console.error('Error fetching bills:', billsError);
-        // Don't throw, just continue without bills
       }
 
       // Process purchases
@@ -112,7 +119,8 @@ const StoreDetailContent = () => {
         products: cupom.produtos.map(p => ({
           nome: p.nome,
           preco: parseFloat(p.preco.toString()),
-          quantidade: p.quantidade
+          quantidade: p.quantidade,
+          preco_unitario: p.preco_unitario ? parseFloat(p.preco_unitario.toString()) : null
         }))
       }));
 
@@ -162,7 +170,6 @@ const StoreDetailContent = () => {
         }))
         .sort((a, b) => b.totalSpent - a.totalSpent);
 
-      // Calculate totals
       const purchasesTotal = purchasesData.reduce((sum, purchase) => sum + purchase.total, 0);
       const billsTotal = billsProcessed.reduce((sum, bill) => sum + bill.total, 0);
 
@@ -180,6 +187,11 @@ const StoreDetailContent = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewPurchase = (purchase: Purchase) => {
+    setSelectedPurchase(purchase);
+    setModalOpen(true);
   };
 
   if (loading) {
@@ -206,6 +218,59 @@ const StoreDetailContent = () => {
       parts.push(`${bills.length} conta${bills.length > 1 ? 's' : ''}`);
     }
     return parts.join(' • ');
+  };
+
+  // Modal content for purchase details
+  const ModalContent = () => {
+    if (!selectedPurchase) return null;
+    
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar size={16} />
+            <span>{new Date(selectedPurchase.date).toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              day: '2-digit',
+              month: 'long',
+              year: 'numeric'
+            })}</span>
+          </div>
+          <p className="font-bold text-primary text-xl">
+            R$ {selectedPurchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+        
+        <div>
+          <h4 className="font-medium text-sm text-muted-foreground mb-3 flex items-center gap-2">
+            <Package size={14} />
+            Produtos ({selectedPurchase.products.length})
+          </h4>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {selectedPurchase.products.map((product, index) => (
+              <div 
+                key={index} 
+                className="flex justify-between items-center p-3 bg-muted/30 rounded-lg"
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-sm text-foreground">
+                    {product.quantidade}x {product.nome}
+                  </p>
+                  {product.preco_unitario && (
+                    <p className="text-xs text-muted-foreground">
+                      R$ {product.preco_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /un
+                    </p>
+                  )}
+                </div>
+                <p className="font-semibold text-primary">
+                  R$ {product.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const content = (
@@ -281,70 +346,114 @@ const StoreDetailContent = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* Purchases Tab */}
+          {/* Purchases Tab - Now with Table */}
           <TabsContent value="history" className="space-y-4">
-            <div className={cn(
-              !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-            )}>
-              {purchases.length === 0 ? (
-                <Card className="p-8 text-center col-span-full">
-                  <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Nenhuma compra encontrada nesta loja.</p>
-                </Card>
-              ) : (
-                purchases.map((purchase) => (
-                  <Card key={purchase.id} className={cn("p-4", isMobile && "mb-4")}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar size={16} />
-                        <span className="text-sm">
+            {purchases.length === 0 ? (
+              <Card className="p-8 text-center">
+                <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">Nenhuma compra encontrada nesta loja.</p>
+              </Card>
+            ) : isMobile ? (
+              // Mobile: Compact cards
+              <div className="space-y-3">
+                {purchases.map((purchase) => (
+                  <Card 
+                    key={purchase.id} 
+                    className="p-4 cursor-pointer hover:shadow-medium transition-all"
+                    onClick={() => handleViewPurchase(purchase)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Calendar size={14} />
                           {new Date(purchase.date).toLocaleDateString('pt-BR')}
-                        </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {purchase.products.length} {purchase.products.length === 1 ? 'item' : 'itens'}
+                        </p>
                       </div>
-                      <p className="font-semibold text-primary text-lg">
-                        R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {purchase.products.map((product, index) => (
-                        <div key={index} className="flex justify-between text-sm">
-                          <span className="text-foreground">
-                            {product.quantidade}x {product.nome}
-                          </span>
-                          <span className="font-medium">
-                            R$ {product.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      ))}
+                      <div className="flex items-center gap-3">
+                        <p className="font-semibold text-primary">
+                          R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        <Eye size={16} className="text-muted-foreground" />
+                      </div>
                     </div>
                   </Card>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              // Desktop: Structured table
+              <Card className="overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead className="text-center">Qtd Itens</TableHead>
+                      <TableHead className="text-right">Valor Total</TableHead>
+                      <TableHead className="text-center w-24">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {purchases.map((purchase) => (
+                      <TableRow 
+                        key={purchase.id} 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleViewPurchase(purchase)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Calendar size={14} className="text-muted-foreground" />
+                            {new Date(purchase.date).toLocaleDateString('pt-BR')}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {purchase.products.length} {purchase.products.length === 1 ? 'item' : 'itens'}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewPurchase(purchase);
+                            }}
+                          >
+                            <Eye size={16} className="mr-1" />
+                            Ver
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Bills Tab */}
           {hasBills && (
             <TabsContent value="bills" className="space-y-4">
-              <div className={cn(
-                !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-              )}>
-                {bills.map((bill) => (
-                  <Card key={bill.id} className={cn("p-4", isMobile && "mb-4")}>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar size={16} />
-                        <span className="text-sm">
-                          {new Date(bill.date).toLocaleDateString('pt-BR')}
-                        </span>
+              {isMobile ? (
+                <div className="space-y-3">
+                  {bills.map((bill) => (
+                    <Card key={bill.id} className="p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar size={14} />
+                          <span className="text-sm">
+                            {new Date(bill.date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+                        <p className="font-semibold text-warning">
+                          R$ {bill.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
                       </div>
-                      <p className="font-semibold text-warning text-lg">
-                        R$ {bill.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                    <div className="space-y-2 text-sm">
                       {bill.historico && (
-                        <p className="text-foreground">{bill.historico}</p>
+                        <p className="text-sm text-foreground mb-2">{bill.historico}</p>
                       )}
                       <div className="flex flex-wrap gap-2">
                         {bill.categoria && (
@@ -356,10 +465,52 @@ const StoreDetailContent = () => {
                           {bill.forma_pagamento}
                         </span>
                       </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card className="overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Pagamento</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bills.map((bill) => (
+                        <TableRow key={bill.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Calendar size={14} className="text-muted-foreground" />
+                              {new Date(bill.date).toLocaleDateString('pt-BR')}
+                            </div>
+                          </TableCell>
+                          <TableCell>{bill.historico || '-'}</TableCell>
+                          <TableCell>
+                            {bill.categoria && (
+                              <span className="text-xs bg-warning/10 text-warning px-2 py-1 rounded-full">
+                                {bill.categoria}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs bg-muted px-2 py-1 rounded-full">
+                              {bill.forma_pagamento}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-warning">
+                            R$ {bill.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Card>
+              )}
             </TabsContent>
           )}
 
@@ -408,11 +559,32 @@ const StoreDetailContent = () => {
 
         {isMobile && <div className="pb-20" />}
       </div>
+      
       {isMobile && <BottomNavigation activeTab="stores" onTabChange={handleTabChange} />}
+
+      {/* Purchase Details Modal */}
+      {isMobile ? (
+        <Sheet open={modalOpen} onOpenChange={setModalOpen}>
+          <SheetContent side="bottom" className="h-[85vh]">
+            <SheetHeader className="mb-4">
+              <SheetTitle>Detalhes da Compra</SheetTitle>
+            </SheetHeader>
+            <ModalContent />
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Detalhes da Compra</DialogTitle>
+            </DialogHeader>
+            <ModalContent />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 
-  // Desktop: wrap with AppLayout, Mobile: render directly
   if (isMobile) {
     return content;
   }

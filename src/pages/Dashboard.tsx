@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -6,12 +6,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarIcon, Store, Package, TrendingUp, Receipt, BarChart3, DollarSign, Camera } from "lucide-react";
+import { Calendar as CalendarIcon, Store, Package, TrendingUp, Receipt, BarChart3, DollarSign, Camera, ChevronDown, LineChart as LineChartIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import ProductsCatalog from "@/components/Products/ProductsCatalog";
 import AppLayout from "@/components/Layout/AppLayout";
+import DashboardCharts from "@/components/Dashboard/DashboardCharts";
 
 interface DateRange {
   from: Date;
@@ -26,6 +27,8 @@ interface DashboardData {
   topStores: { name: string; total: number; purchases: number }[];
   topProducts: { name: string; count: number; totalSpent: number }[];
   recentPurchases: { date: string; store: string; total: number }[];
+  spendingByDate: { date: string; total: number }[];
+  categoryData: { name: string; total: number }[];
 }
 
 const Dashboard = () => {
@@ -40,15 +43,34 @@ const Dashboard = () => {
     uniqueProducts: 0,
     topStores: [],
     topProducts: [],
-    recentPurchases: []
+    recentPurchases: [],
+    spendingByDate: [],
+    categoryData: []
   });
   const [loading, setLoading] = useState(true);
+  const [showCharts, setShowCharts] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Date presets
+  const presets = [
+    { label: '7d', days: 7 },
+    { label: '30d', days: 30 },
+    { label: '90d', days: 90 },
+    { label: '180d', days: 180 },
+    { label: '1 ano', days: 365 },
+  ];
 
   useEffect(() => {
     fetchDashboardData();
   }, [dateRange]);
+
+  const handlePresetClick = (days: number) => {
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+    setDateRange({ from, to });
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -65,7 +87,7 @@ const Dashboard = () => {
         return;
       }
 
-      // Buscar dados no período selecionado
+      // Fetch cupons data
       const { data: cuponsData, error } = await supabase
         .from('cupons')
         .select(`
@@ -89,43 +111,84 @@ const Dashboard = () => {
         throw new Error('Falha ao carregar dados do dashboard');
       }
 
-      // Processar dados
+      // Fetch paid bills for category data
+      const { data: billsData } = await supabase
+        .from('contas_pagar')
+        .select('valor, categoria_nome, data_pagamento')
+        .eq('user_id', user.id)
+        .eq('status', 'paga')
+        .not('data_pagamento', 'is', null)
+        .gte('data_pagamento', dateRange.from.toISOString())
+        .lte('data_pagamento', dateRange.to.toISOString());
+
+      // Process stores and products
       const storesMap = new Map<string, { total: number; count: number }>();
       const productsMap = new Map<string, { count: number; totalSpent: number }>();
+      const dateSpendingMap = new Map<string, number>();
       let totalSpent = 0;
 
       cuponsData.forEach(cupom => {
         const total = parseFloat(cupom.valor_total.toString());
         totalSpent += total;
 
-        // Agrupar por loja
+        // Group by store
         const storeData = storesMap.get(cupom.loja_nome) || { total: 0, count: 0 };
         storeData.total += total;
         storeData.count += 1;
         storesMap.set(cupom.loja_nome, storeData);
 
-        // Agrupar por produto
+        // Group by product
         cupom.produtos.forEach(produto => {
           const productData = productsMap.get(produto.nome) || { count: 0, totalSpent: 0 };
           productData.count += produto.quantidade;
           productData.totalSpent += parseFloat(produto.preco.toString()) * produto.quantidade;
           productsMap.set(produto.nome, productData);
         });
+
+        // Group by date for trend chart
+        const dateKey = format(new Date(cupom.data_compra), 'yyyy-MM-dd');
+        const existingTotal = dateSpendingMap.get(dateKey) || 0;
+        dateSpendingMap.set(dateKey, existingTotal + total);
       });
 
-      // Top 5 lojas
+      // Add bills to date spending
+      (billsData || []).forEach(bill => {
+        const dateKey = format(new Date(bill.data_pagamento!), 'yyyy-MM-dd');
+        const existingTotal = dateSpendingMap.get(dateKey) || 0;
+        dateSpendingMap.set(dateKey, existingTotal + parseFloat(bill.valor.toString()));
+      });
+
+      // Process category data from bills
+      const categoryMap = new Map<string, number>();
+      (billsData || []).forEach(bill => {
+        const cat = bill.categoria_nome || 'Sem categoria';
+        const existing = categoryMap.get(cat) || 0;
+        categoryMap.set(cat, existing + parseFloat(bill.valor.toString()));
+      });
+
+      const categoryData = Array.from(categoryMap.entries())
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6);
+
+      // Spending by date sorted
+      const spendingByDate = Array.from(dateSpendingMap.entries())
+        .map(([date, total]) => ({ date, total }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      // Top 5 stores
       const topStores = Array.from(storesMap.entries())
         .map(([name, data]) => ({ name, total: data.total, purchases: data.count }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
 
-      // Top 5 produtos
+      // Top 5 products
       const topProducts = Array.from(productsMap.entries())
         .map(([name, data]) => ({ name, count: data.count, totalSpent: data.totalSpent }))
         .sort((a, b) => b.totalSpent - a.totalSpent)
         .slice(0, 5);
 
-      // Compras recentes
+      // Recent purchases
       const recentPurchases = cuponsData.slice(0, 5).map(cupom => ({
         date: cupom.data_compra,
         store: cupom.loja_nome,
@@ -139,7 +202,9 @@ const Dashboard = () => {
         uniqueProducts: productsMap.size,
         topStores,
         topProducts,
-        recentPurchases
+        recentPurchases,
+        spendingByDate,
+        categoryData
       });
     } catch (error) {
       console.error('Error:', error);
@@ -164,7 +229,16 @@ const Dashboard = () => {
               <p className="text-muted-foreground">Visão geral dos seus gastos</p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Charts Toggle Button */}
+              <Button 
+                variant={showCharts ? "default" : "outline"}
+                onClick={() => setShowCharts(!showCharts)}
+              >
+                <LineChartIcon className="mr-2 h-4 w-4" />
+                {showCharts ? 'Ocultar Gráficos' : 'Ver Gráficos'}
+              </Button>
+
               {/* Scan Button */}
               <Button 
                 onClick={() => navigate('/scanner')}
@@ -174,15 +248,30 @@ const Dashboard = () => {
                 Escanear Cupom
               </Button>
               
-              {/* Date Range Picker */}
+              {/* Date Range Picker with Presets */}
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full md:w-auto">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} - {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
+                    <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
+                  {/* Preset buttons */}
+                  <div className="flex gap-1 p-3 border-b border-border">
+                    {presets.map((preset) => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePresetClick(preset.days)}
+                        className="text-xs"
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
                   <Calendar
                     mode="range"
                     selected={{ from: dateRange.from, to: dateRange.to }}
@@ -192,12 +281,22 @@ const Dashboard = () => {
                       }
                     }}
                     locale={ptBR}
+                    numberOfMonths={2}
                     className={cn("p-3 pointer-events-auto")}
                   />
                 </PopoverContent>
               </Popover>
             </div>
           </div>
+
+          {/* Charts Section (Collapsible) */}
+          {showCharts && (
+            <DashboardCharts
+              spendingTrend={data.spendingByDate}
+              categoryData={data.categoryData}
+              storeShare={data.topStores}
+            />
+          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -429,8 +528,14 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {/* Complete Products Catalog */}
-          <ProductsCatalog dateRange={dateRange} loading={loading} />
+          {/* Products Catalog */}
+          <Card className="p-6">
+            <h3 className="font-semibold mb-4 flex items-center">
+              <Package size={18} className="mr-2 text-warning" />
+              Catálogo de Produtos
+            </h3>
+            <ProductsCatalog dateRange={dateRange} loading={loading} />
+          </Card>
         </div>
       </div>
     </AppLayout>

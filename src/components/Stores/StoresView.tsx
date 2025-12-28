@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { Store, TrendingUp, Receipt, CreditCard } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Store, TrendingUp, Receipt, CreditCard, Check, X, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import StoreFilters from "./StoreFilters";
 
 interface LojaData {
   name: string;
@@ -25,6 +27,15 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOrder, setSortOrder] = useState<'name' | 'total-desc' | 'total-asc' | 'count'>('total-desc');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'stores' | 'suppliers'>('all');
+
+  // Inline edit state
+  const [editingStore, setEditingStore] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     fetchStoresData();
@@ -107,8 +118,7 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
           bills: data.bills,
           hasReceipts: data.purchases > 0,
           hasBills: data.bills > 0
-        }))
-        .sort((a, b) => b.total - a.total);
+        }));
 
       setStores(storesArray);
       setTotalSpent(total);
@@ -121,6 +131,108 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Filter and sort stores
+  const filteredStores = useMemo(() => {
+    let result = [...stores];
+
+    // Search filter
+    if (searchTerm) {
+      result = result.filter(store => 
+        store.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Type filter
+    if (typeFilter === 'stores') {
+      result = result.filter(store => store.hasReceipts);
+    } else if (typeFilter === 'suppliers') {
+      result = result.filter(store => store.hasBills && !store.hasReceipts);
+    }
+
+    // Sort
+    switch (sortOrder) {
+      case 'name':
+        result.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'total-desc':
+        result.sort((a, b) => b.total - a.total);
+        break;
+      case 'total-asc':
+        result.sort((a, b) => a.total - b.total);
+        break;
+      case 'count':
+        result.sort((a, b) => (b.purchases + b.bills) - (a.purchases + a.bills));
+        break;
+    }
+
+    return result;
+  }, [stores, searchTerm, sortOrder, typeFilter]);
+
+  const handleEditStart = (store: LojaData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingStore(store.name);
+    setEditValue(store.name);
+  };
+
+  const handleEditCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingStore(null);
+    setEditValue("");
+  };
+
+  const handleEditSave = async (oldName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!editValue.trim() || editValue === oldName) {
+      setEditingStore(null);
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const store = stores.find(s => s.name === oldName);
+      
+      // Update cupons if the store has receipts
+      if (store?.hasReceipts) {
+        const { error } = await supabase
+          .from('cupons')
+          .update({ loja_nome: editValue.trim() })
+          .eq('user_id', user.id)
+          .eq('loja_nome', oldName);
+        
+        if (error) throw error;
+      }
+
+      // Update contas_pagar if the store has bills
+      if (store?.hasBills) {
+        const { error } = await supabase
+          .from('contas_pagar')
+          .update({ fornecedor_nome: editValue.trim() })
+          .eq('user_id', user.id)
+          .eq('fornecedor_nome', oldName);
+        
+        if (error) throw error;
+      }
+
+      toast({
+        title: "Nome atualizado",
+        description: `"${oldName}" foi renomeado para "${editValue.trim()}"`,
+      });
+
+      setEditingStore(null);
+      fetchStoresData();
+    } catch (error) {
+      console.error('Error updating store name:', error);
+      toast({
+        title: "Erro ao atualizar",
+        description: "Não foi possível renomear a loja.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -174,6 +286,16 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
         </div>
       </Card>
 
+      {/* Filters */}
+      <StoreFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        sortOrder={sortOrder}
+        onSortChange={setSortOrder}
+        typeFilter={typeFilter}
+        onTypeChange={setTypeFilter}
+      />
+
       <div className={cn(
         isDesktop 
           ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" 
@@ -188,31 +310,68 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
               </div>
             </Card>
           ))
-        ) : stores.length === 0 ? (
+        ) : filteredStores.length === 0 ? (
           <Card className="p-8 text-center shadow-soft col-span-full">
             <Store size={48} className="mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-2 font-medium">Nenhuma loja encontrada</p>
+            <p className="text-muted-foreground mb-2 font-medium">
+              {searchTerm || typeFilter !== 'all' ? 'Nenhuma loja encontrada com os filtros' : 'Nenhuma loja encontrada'}
+            </p>
             <p className="text-sm text-muted-foreground">
-              Escaneie cupons ou cadastre contas para começar a acompanhar seus gastos.
+              {searchTerm || typeFilter !== 'all' ? 'Tente ajustar os filtros.' : 'Escaneie cupons ou cadastre contas para começar.'}
             </p>
           </Card>
         ) : (
-          stores.map((store, index) => (
+          filteredStores.map((store, index) => (
             <Card 
               key={store.name} 
               className="p-4 shadow-soft hover:shadow-medium transition-all cursor-pointer hover:scale-[1.02]"
-              onClick={() => navigate(`/store/${encodeURIComponent(store.name)}`)}
+              onClick={() => editingStore !== store.name && navigate(`/store/${encodeURIComponent(store.name)}`)}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
                   <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center",
+                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
                     store.hasBills && !store.hasReceipts ? "bg-warning/10" : "bg-primary/10"
                   )}>
                     {getStoreIcon(store)}
                   </div>
-                  <div>
-                    <h3 className="font-medium text-foreground">{store.name}</h3>
+                  <div className="flex-1 min-w-0">
+                    {editingStore === store.name ? (
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleEditSave(store.name, e as any);
+                            if (e.key === 'Escape') handleEditCancel(e as any);
+                          }}
+                        />
+                        <button 
+                          onClick={(e) => handleEditSave(store.name, e)}
+                          className="p-1 text-success hover:bg-success/10 rounded"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button 
+                          onClick={handleEditCancel}
+                          className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group">
+                        <h3 className="font-medium text-foreground truncate">{store.name}</h3>
+                        <button 
+                          onClick={(e) => handleEditStart(store, e)}
+                          className="p-1 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center text-xs text-muted-foreground">
                       {store.hasReceipts && <Receipt size={12} className="mr-1" />}
                       {store.hasBills && <CreditCard size={12} className="mr-1" />}
@@ -220,12 +379,12 @@ const StoresView = ({ isDesktop = false }: StoresViewProps) => {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0 ml-2">
                   <p className="font-semibold text-success text-lg">
                     R$ {store.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                   <div className="flex items-center text-xs text-muted-foreground">
-                    #{index + 1} em gastos
+                    #{filteredStores.indexOf(store) + 1} em gastos
                   </div>
                 </div>
               </div>
