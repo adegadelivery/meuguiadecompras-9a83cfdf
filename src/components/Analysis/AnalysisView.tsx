@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Calendar, Receipt, DollarSign, CreditCard } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { BarChart3, Calendar as CalendarIcon, Receipt, DollarSign, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import TransactionModal from "./TransactionModal";
 
 interface HistoryItem {
+  id?: string;
   type: 'purchase' | 'bill';
   date: string;
   store: string;
@@ -19,6 +25,11 @@ interface AnalysisViewProps {
   isDesktop?: boolean;
 }
 
+interface DateRange {
+  from: Date;
+  to: Date;
+}
+
 const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
   const [activeFilter, setActiveFilter] = useState("7days");
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -27,19 +38,29 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
   const [avgPurchase, setAvgPurchase] = useState(0);
   const { toast } = useToast();
 
+  // Custom date range
+  const [customDateRange, setCustomDateRange] = useState<DateRange | null>(null);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+
+  // Transaction modal
+  const [selectedTransaction, setSelectedTransaction] = useState<HistoryItem | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
   const filters = [
     { id: "today", label: "Hoje", days: 0 },
     { id: "yesterday", label: "Ontem", days: 1 },
     { id: "7days", label: "7 Dias", days: 7 },
     { id: "30days", label: "30 Dias", days: 30 },
     { id: "90days", label: "90 Dias", days: 90 },
+    { id: "180days", label: "180 Dias", days: 180 },
+    { id: "365days", label: "1 Ano", days: 365 },
   ];
 
   useEffect(() => {
     fetchAnalysisData();
-  }, [activeFilter]);
+  }, [activeFilter, customDateRange]);
 
-  const getDateRange = (days: number) => {
+  const getDateRange = (days: number): { start: Date; end: Date } => {
     const now = new Date();
     
     if (days === 0) {
@@ -80,10 +101,21 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         return;
       }
 
-      const currentFilter = filters.find(f => f.id === activeFilter);
-      const { start, end } = getDateRange(currentFilter?.days ?? 7);
+      let start: Date;
+      let end: Date;
 
-      // Fetch cupons
+      if (activeFilter === 'custom' && customDateRange) {
+        start = customDateRange.from;
+        end = new Date(customDateRange.to);
+        end.setDate(end.getDate() + 1); // Include the end date
+      } else {
+        const currentFilter = filters.find(f => f.id === activeFilter);
+        const range = getDateRange(currentFilter?.days ?? 7);
+        start = range.start;
+        end = range.end;
+      }
+
+      // Fetch cupons with id for drill-down
       const { data: cuponsData, error: cuponsError } = await supabase
         .from('cupons')
         .select(`
@@ -121,9 +153,10 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         throw new Error('Falha ao carregar dados de contas');
       }
 
-      // Process cupons into history items
+      // Process cupons into history items with id
       const purchasesHistory: HistoryItem[] = (cuponsData || [])
         .map(cupom => ({
+          id: cupom.id,
           type: 'purchase' as const,
           date: cupom.data_compra,
           store: cupom.loja_nome,
@@ -138,6 +171,7 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
       // Process bills into history items
       const billsHistory: HistoryItem[] = (billsData || [])
         .map(bill => ({
+          id: bill.id,
           type: 'bill' as const,
           date: bill.data_pagamento!,
           store: bill.fornecedor_nome,
@@ -172,6 +206,26 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
     }
   };
 
+  const handleTransactionClick = (item: HistoryItem) => {
+    setSelectedTransaction(item);
+    setModalOpen(true);
+  };
+
+  const handleCustomDateSelect = (range: { from?: Date; to?: Date } | undefined) => {
+    if (range?.from && range?.to) {
+      setCustomDateRange({ from: range.from, to: range.to });
+      setActiveFilter('custom');
+      setDatePopoverOpen(false);
+    }
+  };
+
+  const getActiveLabel = () => {
+    if (activeFilter === 'custom' && customDateRange) {
+      return `${format(customDateRange.from, 'dd/MM', { locale: ptBR })} - ${format(customDateRange.to, 'dd/MM', { locale: ptBR })}`;
+    }
+    return filters.find(f => f.id === activeFilter)?.label || '';
+  };
+
   return (
     <div className={cn("flex-1", isDesktop ? "" : "px-4 py-6")}>
       {!isDesktop && (
@@ -183,21 +237,52 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         </div>
       )}
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+      {/* Filter buttons */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-2 flex-wrap">
         {filters.map((filter) => (
           <Button
             key={filter.id}
             variant={activeFilter === filter.id ? "default" : "outline"}
             size="sm"
-            onClick={() => setActiveFilter(filter.id)}
+            onClick={() => {
+              setActiveFilter(filter.id);
+              setCustomDateRange(null);
+            }}
             className="whitespace-nowrap"
           >
-            <Calendar size={14} className="mr-1" />
             {filter.label}
           </Button>
         ))}
+        
+        {/* Custom date picker */}
+        <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant={activeFilter === 'custom' ? "default" : "outline"}
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              <CalendarIcon size={14} className="mr-1" />
+              {activeFilter === 'custom' && customDateRange 
+                ? getActiveLabel()
+                : 'Personalizado'
+              }
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={customDateRange ? { from: customDateRange.from, to: customDateRange.to } : undefined}
+              onSelect={handleCustomDateSelect}
+              locale={ptBR}
+              numberOfMonths={isDesktop ? 2 : 1}
+              className="p-3 pointer-events-auto"
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
+      {/* Stats cards */}
       <div className={cn(
         "grid gap-4 mb-6",
         isDesktop ? "grid-cols-2 md:grid-cols-4 max-w-4xl" : "grid-cols-2"
@@ -249,12 +334,12 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
             <Card className="p-4 shadow-soft">
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-info/10 rounded-lg flex items-center justify-center">
-                  <Calendar size={16} className="text-info" />
+                  <CalendarIcon size={16} className="text-info" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Período</p>
                   <p className="font-semibold text-lg">
-                    {filters.find(f => f.id === activeFilter)?.label}
+                    {getActiveLabel()}
                   </p>
                 </div>
               </div>
@@ -263,6 +348,7 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
         )}
       </div>
 
+      {/* History list */}
       <Card className={cn("p-4 shadow-soft mb-4", isDesktop && "max-w-4xl")}>
         <h3 className="font-semibold mb-4 flex items-center">
           <Receipt size={18} className="mr-2 text-primary" />
@@ -294,11 +380,15 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
             </div>
           ) : (
             history.map((item, index) => (
-              <div key={index} className={cn(
-                "pb-4",
-                !isDesktop && "border-b border-border/50 last:border-b-0",
-                isDesktop && "bg-muted/30 rounded-lg p-4"
-              )}>
+              <div 
+                key={`${item.type}-${item.id || index}`} 
+                className={cn(
+                  "pb-4 cursor-pointer transition-colors hover:bg-muted/50 rounded-lg",
+                  !isDesktop && "border-b border-border/50 last:border-b-0",
+                  isDesktop && "bg-muted/30 p-4"
+                )}
+                onClick={() => handleTransactionClick(item)}
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-start gap-2">
                     <div className={cn(
@@ -352,6 +442,13 @@ const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
       </Card>
 
       {!isDesktop && <div className="pb-20" />}
+
+      {/* Transaction details modal */}
+      <TransactionModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        transaction={selectedTransaction}
+      />
     </div>
   );
 };
