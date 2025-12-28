@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart3, Calendar, Receipt, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface Purchase {
   date: string;
@@ -12,7 +13,11 @@ interface Purchase {
   items: string[];
 }
 
-const AnalysisView = () => {
+interface AnalysisViewProps {
+  isDesktop?: boolean;
+}
+
+const AnalysisView = ({ isDesktop = false }: AnalysisViewProps) => {
   const [activeFilter, setActiveFilter] = useState("7days");
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,13 +166,15 @@ const AnalysisView = () => {
   };
 
   return (
-    <div className="flex-1 px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground mb-2">Análise de Gastos</h1>
-        <p className="text-muted-foreground">
-          Acompanhe seu histórico de compras
-        </p>
-      </div>
+    <div className={cn("flex-1", isDesktop ? "" : "px-4 py-6")}>
+      {!isDesktop && (
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Análise de Gastos</h1>
+          <p className="text-muted-foreground">
+            Acompanhe seu histórico de compras
+          </p>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         {filters.map((filter) => (
@@ -184,7 +191,10 @@ const AnalysisView = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className={cn(
+        "grid gap-4 mb-6",
+        isDesktop ? "grid-cols-2 md:grid-cols-4 max-w-4xl" : "grid-cols-2"
+      )}>
         <Card className="p-4 shadow-soft">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -212,16 +222,50 @@ const AnalysisView = () => {
             </div>
           </div>
         </Card>
+
+        {isDesktop && (
+          <>
+            <Card className="p-4 shadow-soft">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-success/10 rounded-lg flex items-center justify-center">
+                  <Receipt size={16} className="text-success" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Compras</p>
+                  <p className="font-semibold text-lg">
+                    {loading ? "..." : purchases.length}
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 shadow-soft">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-info/10 rounded-lg flex items-center justify-center">
+                  <Calendar size={16} className="text-info" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Período</p>
+                  <p className="font-semibold text-lg">
+                    {filters.find(f => f.id === activeFilter)?.label}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </>
+        )}
       </div>
 
-      <Card className="p-4 shadow-soft mb-4">
+      <Card className={cn("p-4 shadow-soft mb-4", isDesktop && "max-w-4xl")}>
         <h3 className="font-semibold mb-4 flex items-center">
           <Receipt size={18} className="mr-2 text-primary" />
           Histórico de Compras
         </h3>
-        <div className="space-y-4">
+        <div className={cn(
+          isDesktop ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-4"
+        )}>
           {loading ? (
-            [1, 2, 3].map((i) => (
+            [1, 2, 3, 4].map((i) => (
               <div key={i} className="border-b border-border/50 pb-4 animate-pulse">
                 <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
                 <div className="h-3 bg-muted rounded w-1/3 mb-2"></div>
@@ -232,7 +276,7 @@ const AnalysisView = () => {
               </div>
             ))
           ) : purchases.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-8 col-span-full">
               <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-2 font-medium">
                 Nenhuma compra encontrada
@@ -243,7 +287,11 @@ const AnalysisView = () => {
             </div>
           ) : (
             purchases.map((purchase, index) => (
-              <div key={index} className="border-b border-border/50 pb-4 last:border-b-0">
+              <div key={index} className={cn(
+                "pb-4",
+                !isDesktop && "border-b border-border/50 last:border-b-0",
+                isDesktop && "bg-muted/30 rounded-lg p-4"
+              )}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="font-medium text-foreground">{purchase.store}</p>
@@ -257,7 +305,7 @@ const AnalysisView = () => {
                 </div>
                 {purchase.items.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {purchase.items.map((item, itemIndex) => (
+                    {purchase.items.slice(0, isDesktop ? 5 : 3).map((item, itemIndex) => (
                       <span 
                         key={itemIndex}
                         className="text-xs bg-muted px-2 py-1 rounded-full"
@@ -265,6 +313,11 @@ const AnalysisView = () => {
                         {item}
                       </span>
                     ))}
+                    {purchase.items.length > (isDesktop ? 5 : 3) && (
+                      <span className="text-xs text-muted-foreground px-2 py-1">
+                        +{purchase.items.length - (isDesktop ? 5 : 3)} mais
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -273,7 +326,7 @@ const AnalysisView = () => {
         </div>
       </Card>
 
-      <div className="pb-20" />
+      {!isDesktop && <div className="pb-20" />}
     </div>
   );
 };

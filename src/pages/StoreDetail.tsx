@@ -3,10 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Store, Receipt, Package, Calendar } from "lucide-react";
+import { ArrowLeft, Store, Receipt, Package, Calendar, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNavigation from "@/components/Layout/BottomNavigation";
+import AppLayout from "@/components/Layout/AppLayout";
+import { cn } from "@/lib/utils";
 
 interface Purchase {
   id: string;
@@ -23,10 +26,11 @@ interface ProductSummary {
   purchaseCount: number;
 }
 
-const StoreDetail = () => {
+const StoreDetailContent = () => {
   const { storeName } = useParams<{ storeName: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,9 +157,20 @@ const StoreDetail = () => {
     navigate("/", { state: { tab } });
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-4">
+  const content = (
+    <div className={cn("min-h-screen bg-background", !isMobile && "p-6")}>
+      <div className={cn("mx-auto", isMobile ? "max-w-4xl p-4" : "max-w-7xl")}>
+        {/* Breadcrumb for desktop */}
+        {!isMobile && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+            <button onClick={() => navigate('/stores')} className="hover:text-foreground transition-colors">
+              Lojas
+            </button>
+            <ChevronRight size={14} />
+            <span className="text-foreground font-medium">{decodeURIComponent(storeName!)}</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button
@@ -183,84 +198,120 @@ const StoreDetail = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="history" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={cn("grid w-full", isMobile ? "grid-cols-2" : "grid-cols-2 max-w-md")}>
             <TabsTrigger value="history">Histórico</TabsTrigger>
             <TabsTrigger value="products">Produtos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="history" className="space-y-4">
-            {purchases.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhuma compra encontrada nesta loja.</p>
-              </Card>
-            ) : (
-              purchases.map((purchase) => (
-                <Card key={purchase.id} className="p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar size={16} />
-                      <span className="text-sm">
-                        {new Date(purchase.date).toLocaleDateString('pt-BR')}
-                      </span>
-                    </div>
-                    <p className="font-semibold text-primary text-lg">
-                      R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    {purchase.products.map((product, index) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span className="text-foreground">
-                          {product.quantidade}x {product.nome}
-                        </span>
-                        <span className="font-medium">
-                          R$ {product.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            <div className={cn(
+              !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            )}>
+              {purchases.length === 0 ? (
+                <Card className="p-8 text-center col-span-full">
+                  <Receipt size={48} className="mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Nenhuma compra encontrada nesta loja.</p>
+                </Card>
+              ) : (
+                purchases.map((purchase) => (
+                  <Card key={purchase.id} className={cn("p-4", isMobile && "mb-4")}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar size={16} />
+                        <span className="text-sm">
+                          {new Date(purchase.date).toLocaleDateString('pt-BR')}
                         </span>
                       </div>
-                    ))}
-                  </div>
-                </Card>
-              ))
-            )}
+                      <p className="font-semibold text-primary text-lg">
+                        R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      {purchase.products.map((product, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span className="text-foreground">
+                            {product.quantidade}x {product.nome}
+                          </span>
+                          <span className="font-medium">
+                            R$ {product.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="products" className="space-y-4">
-            {products.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Package size={48} className="mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">Nenhum produto encontrado nesta loja.</p>
-              </Card>
-            ) : (
-              products.map((product, index) => (
-                <Card key={index} className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="font-medium text-foreground mb-1">{product.name}</h3>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <p>Quantidade total: {product.totalQuantity}</p>
-                        <p>Comprado {product.purchaseCount}x</p>
-                        <p>Preço médio: R$ {product.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            <div className={cn(
+              !isMobile && "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            )}>
+              {products.length === 0 ? (
+                <Card className="p-8 text-center col-span-full">
+                  <Package size={48} className="mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">Nenhum produto encontrado nesta loja.</p>
+                </Card>
+              ) : (
+                products.map((product, index) => (
+                  <Card 
+                    key={index} 
+                    className={cn(
+                      "p-4 cursor-pointer hover:shadow-medium transition-all",
+                      isMobile && "mb-4"
+                    )}
+                    onClick={() => navigate(`/product/${encodeURIComponent(product.name)}`)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="font-medium text-foreground mb-1">{product.name}</h3>
+                        <div className="text-sm text-muted-foreground space-y-1">
+                          <p>Quantidade total: {product.totalQuantity}</p>
+                          <p>Comprado {product.purchaseCount}x</p>
+                          <p>Preço médio: R$ {product.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-primary text-lg">
+                          R$ {product.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total gasto</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-primary text-lg">
-                        R$ {product.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Total gasto</p>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            )}
+                  </Card>
+                ))
+              )}
+            </div>
           </TabsContent>
         </Tabs>
 
-        <div className="pb-20" />
+        {isMobile && <div className="pb-20" />}
       </div>
-      <BottomNavigation activeTab="stores" onTabChange={handleTabChange} />
+      {isMobile && <BottomNavigation activeTab="stores" onTabChange={handleTabChange} />}
     </div>
   );
+
+  // Desktop: wrap with AppLayout, Mobile: render directly
+  if (isMobile) {
+    return content;
+  }
+
+  return <AppLayout>{content}</AppLayout>;
+};
+
+const StoreDetail = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile === undefined) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  return <StoreDetailContent />;
 };
 
 export default StoreDetail;

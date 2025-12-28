@@ -6,11 +6,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarIcon, Store, Package, TrendingUp, Receipt, BarChart3, DollarSign } from "lucide-react";
+import { Calendar as CalendarIcon, Store, Package, TrendingUp, Receipt, BarChart3, DollarSign, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import ProductsCatalog from "@/components/Products/ProductsCatalog";
+import AppLayout from "@/components/Layout/AppLayout";
 
 interface DateRange {
   from: Date;
@@ -153,259 +154,286 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground">Visão geral dos seus gastos</p>
-          </div>
-          
-          {/* Date Range Picker */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full md:w-auto">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} - {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
+    <AppLayout>
+      <div className="min-h-screen bg-background p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+              <p className="text-muted-foreground">Visão geral dos seus gastos</p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {/* Scan Button */}
+              <Button 
+                onClick={() => navigate('/scanner')}
+                className="bg-gradient-accent hover:opacity-90"
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                Escanear Cupom
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="range"
-                selected={{ from: dateRange.from, to: dateRange.to }}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({ from: range.from, to: range.to });
-                  }
-                }}
-                locale={ptBR}
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <DollarSign size={24} className="text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Gasto</p>
-                <p className="text-2xl font-bold">
-                  R$ {loading ? "..." : data.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
+              
+              {/* Date Range Picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full md:w-auto">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} - {format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={{ from: dateRange.from, to: dateRange.to }}
+                    onSelect={(range) => {
+                      if (range?.from && range?.to) {
+                        setDateRange({ from: range.from, to: range.to });
+                      }
+                    }}
+                    locale={ptBR}
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
-          </Card>
+          </div>
 
-          <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
-                <Receipt size={24} className="text-accent" />
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="p-6 hover:shadow-medium transition-shadow">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <DollarSign size={24} className="text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Gasto</p>
+                  <p className="text-2xl font-bold">
+                    R$ {loading ? "..." : data.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Compras</p>
-                <p className="text-2xl font-bold">
-                  {loading ? "..." : data.totalPurchases}
-                </p>
-              </div>
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
-                <Store size={24} className="text-success" />
+            <Card className="p-6 hover:shadow-medium transition-shadow">
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
+                  <Receipt size={24} className="text-accent" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Compras</p>
+                  <p className="text-2xl font-bold">
+                    {loading ? "..." : data.totalPurchases}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Lojas</p>
-                <p className="text-2xl font-bold">
-                  {loading ? "..." : data.uniqueStores}
-                </p>
-              </div>
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center">
-                <Package size={24} className="text-warning" />
+            <Card 
+              className="p-6 hover:shadow-medium transition-shadow cursor-pointer"
+              onClick={() => navigate('/stores')}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
+                  <Store size={24} className="text-success" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Lojas</p>
+                  <p className="text-2xl font-bold">
+                    {loading ? "..." : data.uniqueStores}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Produtos</p>
-                <p className="text-2xl font-bold">
-                  {loading ? "..." : data.uniqueProducts}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </div>
+            </Card>
 
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Top Stores */}
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4 flex items-center">
-              <Store size={18} className="mr-2 text-primary" />
-              Top 5 Lojas
-            </h3>
-            <div className="space-y-4">
-              {loading ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-                    <div className="h-6 bg-muted rounded w-1/3"></div>
-                  </div>
-                ))
-              ) : data.topStores.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhuma loja encontrada no período selecionado
-                </p>
-              ) : (
-                data.topStores.map((store, index) => (
-                  <div key={store.name} className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">{store.name}</p>
-                      <p className="text-sm text-muted-foreground">{store.purchases} compras</p>
+            <Card 
+              className="p-6 hover:shadow-medium transition-shadow cursor-pointer"
+              onClick={() => navigate('/products')}
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center">
+                  <Package size={24} className="text-warning" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Produtos</p>
+                  <p className="text-2xl font-bold">
+                    {loading ? "..." : data.uniqueProducts}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top Stores */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center">
+                  <Store size={18} className="mr-2 text-primary" />
+                  Top 5 Lojas
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/stores')}>
+                  Ver todas
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+                      <div className="h-6 bg-muted rounded w-1/3"></div>
                     </div>
-                    <p className="font-semibold text-primary">
-                      R$ {store.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-
-          {/* Top Products */}
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4 flex items-center">
-              <Package size={18} className="mr-2 text-accent" />
-              Top 5 Produtos
-            </h3>
-            <div className="space-y-4">
-              {loading ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="animate-pulse">
-                    <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
-                    <div className="h-6 bg-muted rounded w-1/3"></div>
-                  </div>
-                ))
-              ) : data.topProducts.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhum produto encontrado no período selecionado
-                </p>
-              ) : (
-                data.topProducts.map((product, index) => (
-                  <div key={product.name} className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">{product.count}x comprado</p>
-                    </div>
-                    <p className="font-semibold text-primary">
-                      R$ {product.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Grid with Recent Purchases and Complete Products */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Purchases */}
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4 flex items-center">
-              <Receipt size={18} className="mr-2 text-success" />
-              Compras Recentes
-            </h3>
-            <div className="space-y-4">
-              {loading ? (
-                [1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="animate-pulse border-b border-border/50 pb-4">
-                    <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
-                    <div className="h-6 bg-muted rounded w-1/4"></div>
-                  </div>
-                ))
-              ) : data.recentPurchases.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhuma compra encontrada no período selecionado
-                </p>
-              ) : (
-                data.recentPurchases.map((purchase, index) => (
-                  <div key={index} className="flex justify-between items-center border-b border-border/50 pb-4 last:border-0">
-                    <div>
-                      <p className="font-medium">{purchase.store}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(purchase.date).toLocaleDateString('pt-BR')}
+                  ))
+                ) : data.topStores.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhuma loja encontrada no período selecionado
+                  </p>
+                ) : (
+                  data.topStores.map((store, index) => (
+                    <div 
+                      key={store.name} 
+                      className="flex justify-between items-center cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                      onClick={() => navigate(`/store/${encodeURIComponent(store.name)}`)}
+                    >
+                      <div>
+                        <p className="font-medium">{store.name}</p>
+                        <p className="text-sm text-muted-foreground">{store.purchases} compras</p>
+                      </div>
+                      <p className="font-semibold text-primary">
+                        R$ {store.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                    <p className="font-semibold text-primary">
-                      R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
+                  ))
+                )}
+              </div>
+            </Card>
 
-          {/* Products Analysis Preview */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold flex items-center">
-                <Package size={18} className="mr-2 text-warning" />
-                Produtos Mais Comprados
-              </h3>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => navigate('/product/all')}
-              >
-                Ver Todos
-              </Button>
-            </div>
-            <div className="space-y-4">
-              {loading ? (
-                [1, 2, 3].map((i) => (
-                  <div key={i} className="animate-pulse border-b border-border/50 pb-4">
-                    <div className="h-4 bg-muted rounded w-2/3 mb-2"></div>
-                    <div className="h-3 bg-muted rounded w-1/3"></div>
-                  </div>
-                ))
-              ) : data.topProducts.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  Nenhum produto encontrado
-                </p>
-              ) : (
-                data.topProducts.slice(0, 3).map((product, index) => (
-                  <div key={product.name} className="border-b border-border/50 pb-4 last:border-0">
-                    <div className="flex justify-between items-start">
+            {/* Top Products */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center">
+                  <Package size={18} className="mr-2 text-accent" />
+                  Top 5 Produtos
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/products')}>
+                  Ver todos
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-4 bg-muted rounded w-1/2 mb-2"></div>
+                      <div className="h-6 bg-muted rounded w-1/3"></div>
+                    </div>
+                  ))
+                ) : data.topProducts.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhum produto encontrado no período selecionado
+                  </p>
+                ) : (
+                  data.topProducts.map((product, index) => (
+                    <div 
+                      key={product.name} 
+                      className="flex justify-between items-center cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                      onClick={() => navigate(`/product/${encodeURIComponent(product.name)}`)}
+                    >
                       <div>
-                        <p className="font-medium text-sm">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {product.count}x comprado
-                        </p>
+                        <p className="font-medium">{product.name}</p>
+                        <p className="text-sm text-muted-foreground">{product.count}x comprado</p>
                       </div>
-                      <p className="text-sm font-semibold text-primary">
+                      <p className="font-semibold text-primary">
                         R$ {product.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </p>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
+                  ))
+                )}
+              </div>
+            </Card>
+          </div>
 
-        {/* Complete Products Catalog */}
-        <ProductsCatalog dateRange={dateRange} loading={loading} />
+          {/* Grid with Recent Purchases and Analysis Preview */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent Purchases */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center">
+                <Receipt size={18} className="mr-2 text-success" />
+                Compras Recentes
+              </h3>
+              <div className="space-y-4">
+                {loading ? (
+                  [1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="animate-pulse border-b border-border/50 pb-4">
+                      <div className="h-4 bg-muted rounded w-1/3 mb-2"></div>
+                      <div className="h-6 bg-muted rounded w-1/4"></div>
+                    </div>
+                  ))
+                ) : data.recentPurchases.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    Nenhuma compra encontrada no período selecionado
+                  </p>
+                ) : (
+                  data.recentPurchases.map((purchase, index) => (
+                    <div 
+                      key={index} 
+                      className="flex justify-between items-center border-b border-border/50 pb-4 last:border-0 cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                      onClick={() => navigate(`/store/${encodeURIComponent(purchase.store)}`)}
+                    >
+                      <div>
+                        <p className="font-medium">{purchase.store}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(purchase.date).toLocaleDateString('pt-BR')}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-primary">
+                        R$ {purchase.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </Card>
+
+            {/* Analysis Preview */}
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold flex items-center">
+                  <BarChart3 size={18} className="mr-2 text-info" />
+                  Análise Rápida
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/analysis')}>
+                  Ver análise completa
+                </Button>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground mb-1">Média por compra</p>
+                  <p className="text-2xl font-bold text-primary">
+                    R$ {loading ? "..." : (data.totalPurchases > 0 ? (data.totalSpent / data.totalPurchases).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "0,00")}
+                  </p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground mb-1">Média de produtos por compra</p>
+                  <p className="text-2xl font-bold text-accent">
+                    {loading ? "..." : (data.totalPurchases > 0 ? Math.round(data.uniqueProducts / data.totalPurchases) : 0)}
+                  </p>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground mb-1">Loja mais visitada</p>
+                  <p className="text-lg font-bold text-success">
+                    {loading ? "..." : (data.topStores[0]?.name || "Nenhuma")}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Complete Products Catalog */}
+          <ProductsCatalog dateRange={dateRange} loading={loading} />
+        </div>
       </div>
-    </div>
+    </AppLayout>
   );
 };
 

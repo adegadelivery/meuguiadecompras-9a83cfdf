@@ -2,10 +2,13 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Package, Store, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, Package, Store, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNavigation from "@/components/Layout/BottomNavigation";
+import AppLayout from "@/components/Layout/AppLayout";
+import { cn } from "@/lib/utils";
 
 interface ProductPurchase {
   date: string;
@@ -23,10 +26,11 @@ interface StoreData {
   totalSpent: number;
 }
 
-const ProductDetail = () => {
+const ProductDetailContent = () => {
   const { productName } = useParams<{ productName: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [purchases, setPurchases] = useState<ProductPurchase[]>([]);
   const [stores, setStores] = useState<StoreData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,9 +168,20 @@ const ProductDetail = () => {
     navigate("/", { state: { tab } });
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto p-4">
+  const content = (
+    <div className={cn("min-h-screen bg-background", !isMobile && "p-6")}>
+      <div className={cn("mx-auto", isMobile ? "max-w-4xl p-4" : "max-w-7xl")}>
+        {/* Breadcrumb for desktop */}
+        {!isMobile && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
+            <button onClick={() => navigate('/products')} className="hover:text-foreground transition-colors">
+              Produtos
+            </button>
+            <ChevronRight size={14} />
+            <span className="text-foreground font-medium">{decodeURIComponent(productName!)}</span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button
@@ -193,7 +208,10 @@ const ProductDetail = () => {
         </div>
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className={cn(
+          "grid gap-4 mb-6",
+          isMobile ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-3 lg:grid-cols-4"
+        )}>
           <Card className="p-4">
             <div className="flex items-center gap-3">
               <TrendingUp size={20} className="text-primary" />
@@ -229,73 +247,121 @@ const ProductDetail = () => {
               </div>
             </div>
           </Card>
+
+          {!isMobile && (
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <Store size={20} className="text-info" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Lojas</p>
+                  <p className="font-semibold text-lg">
+                    {stores.length}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
-        {/* Por Loja */}
-        <Card className="mb-6">
-          <div className="p-4 border-b">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Store size={18} />
-              Por Loja
-            </h2>
-          </div>
-          <div className="p-4 space-y-4">
-            {stores.map((store, index) => (
-              <div key={store.name} className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-medium">{store.name}</h3>
-                  <div className="text-sm text-muted-foreground">
-                    {store.purchaseCount} compras • {store.totalQuantity} unidades
+        <div className={cn(
+          "grid gap-6",
+          !isMobile && "grid-cols-1 lg:grid-cols-2"
+        )}>
+          {/* Por Loja */}
+          <Card className="mb-6 lg:mb-0">
+            <div className="p-4 border-b">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Store size={18} />
+                Por Loja
+              </h2>
+            </div>
+            <div className="p-4 space-y-4">
+              {stores.map((store, index) => (
+                <div 
+                  key={store.name} 
+                  className="flex justify-between items-center cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                  onClick={() => navigate(`/store/${encodeURIComponent(store.name)}`)}
+                >
+                  <div>
+                    <h3 className="font-medium">{store.name}</h3>
+                    <div className="text-sm text-muted-foreground">
+                      {store.purchaseCount} compras • {store.totalQuantity} unidades
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">
+                      R$ {store.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Total: R$ {store.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold">
-                    R$ {store.averagePrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Total: R$ {store.totalSpent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
 
-        {/* Histórico de Compras */}
-        <Card>
-          <div className="p-4 border-b">
-            <h2 className="font-semibold flex items-center gap-2">
-              <Package size={18} />
-              Histórico de Compras
-            </h2>
-          </div>
-          <div className="p-4 space-y-3">
-            {purchases.map((purchase, index) => (
-              <div key={index} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-                <div>
-                  <p className="font-medium">{purchase.store}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(purchase.date).toLocaleDateString('pt-BR')} • {purchase.quantity}x
-                  </p>
+          {/* Histórico de Compras */}
+          <Card>
+            <div className="p-4 border-b">
+              <h2 className="font-semibold flex items-center gap-2">
+                <Package size={18} />
+                Histórico de Compras
+              </h2>
+            </div>
+            <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+              {purchases.map((purchase, index) => (
+                <div 
+                  key={index} 
+                  className="flex justify-between items-center py-2 border-b border-border/50 last:border-0 cursor-pointer hover:bg-muted/50 p-2 rounded-lg transition-colors"
+                  onClick={() => navigate(`/store/${encodeURIComponent(purchase.store)}`)}
+                >
+                  <div>
+                    <p className="font-medium">{purchase.store}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(purchase.date).toLocaleDateString('pt-BR')} • {purchase.quantity}x
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">
+                      R$ {purchase.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Total: R$ {(purchase.price * purchase.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold">
-                    R$ {purchase.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/un
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Total: R$ {(purchase.price * purchase.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+        </div>
 
-        <div className="pb-20" />
+        {isMobile && <div className="pb-20" />}
       </div>
-      <BottomNavigation activeTab="products" onTabChange={handleTabChange} />
+      {isMobile && <BottomNavigation activeTab="products" onTabChange={handleTabChange} />}
     </div>
   );
+
+  // Desktop: wrap with AppLayout, Mobile: render directly
+  if (isMobile) {
+    return content;
+  }
+
+  return <AppLayout>{content}</AppLayout>;
+};
+
+const ProductDetail = () => {
+  const isMobile = useIsMobile();
+
+  if (isMobile === undefined) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  return <ProductDetailContent />;
 };
 
 export default ProductDetail;
