@@ -12,6 +12,7 @@ import Scanner from "./pages/Scanner";
 import Stores from "./pages/Stores";
 import Products from "./pages/Products";
 import Analysis from "./pages/Analysis";
+import Bills from "./pages/Bills";
 import StoreDetail from "./pages/StoreDetail";
 import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/stores" element={<Stores />} />
               <Route path="/products" element={<Products />} />
               <Route path="/analysis" element={<Analysis />} />
+              <Route path="/bills" element={<Bills />} />
               <Route path="/store/:storeName" element={<StoreDetail />} />
               <Route path="/product/:productName" element={<ProductDetail />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

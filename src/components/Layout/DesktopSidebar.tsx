@@ -6,7 +6,8 @@ import {
   Camera, 
   Store, 
   Package, 
-  BarChart3, 
+  BarChart3,
+  CreditCard,
   LogOut,
   ChevronLeft,
   ChevronRight
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { id: "stores", label: "Lojas", icon: Store, path: "/stores" },
   { id: "products", label: "Produtos", icon: Package, path: "/products" },
   { id: "analysis", label: "Análise", icon: BarChart3, path: "/analysis" },
+  { id: "bills", label: "Contas a Pagar", icon: CreditCard, path: "/bills" },
 ];
 
 const DesktopSidebar = () => {

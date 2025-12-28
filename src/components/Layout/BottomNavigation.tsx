@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Store, Package, BarChart3, Camera } from "lucide-react";
+import { Store, Package, BarChart3, Camera, CreditCard } from "lucide-react";
 
 interface BottomNavigationProps {
   activeTab: string;
@@ -11,6 +11,7 @@ const tabs = [
   { id: "stores", label: "Lojas", icon: Store },
   { id: "products", label: "Produtos", icon: Package },
   { id: "analysis", label: "Análise", icon: BarChart3 },
+  { id: "bills", label: "Contas", icon: CreditCard },
 ];
 
 const BottomNavigation = ({ activeTab, onTabChange }: BottomNavigationProps) => {

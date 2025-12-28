@@ -8,6 +8,7 @@ import ScannerView from "@/components/Scanner/ScannerView";
 import StoresView from "@/components/Stores/StoresView";
 import ProductsView from "@/components/Products/ProductsView";
 import AnalysisView from "@/components/Analysis/AnalysisView";
+import BillsView from "@/components/Bills/BillsView";
 import { Loader2 } from "lucide-react";
 
 const Index = () => {
@@ -59,6 +60,8 @@ const Index = () => {
         return <ProductsView />;
       case "analysis":
         return <AnalysisView />;
+      case "bills":
+        return <BillsView />;
       default:
         return <ScannerView />;
     }
